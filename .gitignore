@@ -1,0 +1,12 @@
+# Runtime data
+netmon.db
+netmon.db-shm
+netmon.db-wal
+*.pcap
+netmon.log
+netmon.log.*.gz
+
+/gcc-mingw
+/npcap-sdk
+
+netmon_windows_amd64.syso

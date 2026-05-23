@@ -1,0 +1,4 @@
+#include <winuser.h>
+
+/* Standard manifest resource id is 1 for EXEs. */
+1 24 "netmon.manifest"

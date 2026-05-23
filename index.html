@@ -1,0 +1,2960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetMon</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2128;
+    --surface-3: #232931;
+    --border: #30363d;
+    --border-soft: #21262d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-faint: #6e7681;
+    --accent: #58a6ff;
+    --accent-dim: rgba(88,166,255,0.15);
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+    --radius: 8px;
+    --radius-sm: 6px;
+  }
+  body[data-theme="midnight"] {
+    --bg:#05070d; --surface:#0a0f1a; --surface-2:#0f1626; --surface-3:#16213a;
+    --border:#1f2a44; --border-soft:#15203a;
+  }
+  body[data-theme="light"] {
+    --bg:#f6f8fa; --surface:#ffffff; --surface-2:#f0f3f7; --surface-3:#e6ebf2;
+    --border:#d0d7de; --border-soft:#e1e5eb;
+    --text:#1f2328; --text-dim:#57606a; --text-faint:#8b949e;
+    --accent:#0969da; --accent-dim: rgba(9,105,218,0.10);
+    --success:#1f883d; --warning:#9a6700; --danger:#cf222e;
+  }
+  body.compact { font-size: 12px; }
+  body.compact td, body.compact th { padding: 4px 8px; }
+  body.compact .card { padding: 10px; }
+  body.compact .card .value { font-size: 17px; }
+  body.compact .panel { padding: 10px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 13px;
+    display: flex; overflow: hidden;
+  }
+  .sidebar {
+    width: 220px; background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .logo {
+    padding: 20px; font-size: 18px; font-weight: 600; color: var(--accent);
+    border-bottom: 1px solid var(--border-soft); letter-spacing: -0.3px;
+  }
+  .logo .dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-faint); margin-right: 8px; transition: background 0.3s;
+  }
+  .logo .dot.live { background: var(--success); box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; }
+  .logo .dot.paused { background: var(--warning); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+  .nav a {
+    display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+    color: var(--text-dim); text-decoration: none; font-size: 13px;
+    border-left: 3px solid transparent; transition: all 0.12s; cursor: pointer;
+  }
+  .nav a:hover { background: var(--surface-2); color: var(--text); }
+  .nav a.active { background: var(--surface-2); color: var(--accent); border-left-color: var(--accent); }
+  .nav a .icon { width: 18px; text-align: center; font-size: 14px; }
+  .sidebar-foot {
+    padding: 14px 20px; border-top: 1px solid var(--border-soft);
+    font-size: 11px; color: var(--text-faint); line-height: 1.6;
+  }
+  main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  header.topbar {
+    padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .content { flex: 1; overflow-y: auto; padding: 20px; }
+  .statusbar {
+    padding: 8px 20px; background: var(--surface); border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-dim); display: flex; gap: 20px; flex-wrap: wrap;
+  }
+  select, input[type="text"], input[type="number"], button {
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+    padding: 7px 12px; border-radius: var(--radius-sm); font-size: 13px;
+    font-family: inherit; outline: none; transition: all 0.12s;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  button { cursor: pointer; user-select: none; }
+  button:hover { background: var(--surface-3); border-color: var(--text-faint); }
+  button:active { transform: translateY(1px); }
+  button:disabled, button[disabled] { opacity: 0.5; cursor: not-allowed; }
+  button:disabled:hover { background: var(--surface-2); border-color: var(--border); transform: none; }
+  button.primary { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 500; }
+  button.primary:hover { opacity: 0.88; background: var(--accent); }
+  button.danger { background: var(--danger); color: white; border-color: var(--danger); }
+  button.danger:hover { opacity: 0.88; background: var(--danger); }
+  button.ghost { background: transparent; }
+  button.small { padding: 4px 10px; font-size: 12px; }
+  input[type="text"], input[type="number"] { min-width: 140px; }
+  .pill {
+    padding: 4px 12px; border-radius: 12px; font-size: 11px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    color: var(--text-dim); font-weight: 500;
+  }
+  .pill.running { color: var(--success); border-color: var(--success); }
+  .pill.paused { color: var(--warning); border-color: var(--warning); }
+  .pill.live::after {
+    content: "● LIVE"; margin-left: 8px; color: var(--success); font-size: 9px;
+    animation: pulse 1.5s infinite;
+  }
+  .spacer { flex: 1; }
+  .vsep { width: 1px; background: var(--border); height: 22px; margin: 0 4px; }
+  .tab { display: none; }
+  .tab.active { display: block; animation: fadeIn 0.15s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent); opacity: 0.5;
+  }
+  .card.success::before { background: var(--success); }
+  .card.danger::before  { background: var(--danger); }
+  .card.warning::before { background: var(--warning); }
+  .card label {
+    display: block; font-size: 11px; text-transform: uppercase;
+    color: var(--text-dim); letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 500;
+  }
+  .card .value { font-size: 22px; font-weight: 600; color: var(--text); transition: color 0.3s; }
+  .card .value.flash { color: var(--accent); }
+  .card .sub { font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+  }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .panel h3 {
+    font-size: 12px; text-transform: uppercase; color: var(--text-dim);
+    letter-spacing: 0.5px; font-weight: 600;
+  }
+  .grid { display: grid; gap: 12px; }
+  .grid-2 { grid-template-columns: 2fr 1fr; }
+  @media (max-width: 1100px) { .grid-2 { grid-template-columns: 1fr; } }
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: auto;
+    max-height: calc(100vh - 280px);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left; padding: 10px 12px; font-weight: 500; color: var(--text-dim);
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; cursor: pointer; user-select: none;
+    text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; white-space: nowrap;
+  }
+  th:hover { color: var(--text); }
+  td {
+    padding: 8px 12px; border-bottom: 1px solid var(--border-soft);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px;
+  }
+  tr { transition: background 0.08s; }
+  tr:hover td { background: var(--surface-2); }
+  tr.blocked td { color: var(--danger); }
+  tr.local td { color: var(--text-faint); }
+  tr.threat td { background: rgba(248,81,73,0.06); }
+  tr.threat td:first-child::before {
+    content: "⚠ "; color: var(--danger);
+  }
+  tr.selected td { background: var(--accent-dim); }
+  .cc { color: var(--text-faint); font-size: 11px; margin-left: 4px; }
+  tr.new-flow td { animation: flashRow 1.5s ease-out; }
+  @keyframes flashRow {
+    0% { background: rgba(88,166,255,0.25); }
+    100% { background: transparent; }
+  }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 500; background: var(--surface-3); color: var(--text-dim);
+  }
+  .badge.tcp { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge.udp { background: rgba(210,153,34,0.15); color: var(--warning); }
+  .badge.blocked { background: rgba(248,81,73,0.15); color: var(--danger); }
+  .details {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-top: 12px;
+    font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px;
+    color: var(--text-dim); line-height: 1.6; min-height: 80px;
+  }
+  .details .k { color: var(--text-faint); }
+  .details .v { color: var(--text); }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    padding: 12px 18px; background: var(--surface);
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: slideIn 0.2s; max-width: 360px; font-size: 13px; z-index: 1000;
+  }
+  .toast.success { border-left-color: var(--success); }
+  .toast.error { border-left-color: var(--danger); }
+  .toast.warn { border-left-color: var(--warning); }
+  @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .chart-box { height: 280px; position: relative; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .mb { margin-bottom: 12px; }
+  .hint { color: var(--text-faint); font-size: 11px; margin-top: 4px; }
+  .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 0; }
+  .check input { accent-color: var(--accent); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  .empty { padding: 40px; text-align: center; color: var(--text-faint); font-style: italic; }
+  .legend-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 6px; vertical-align: middle;
+  }
+  .row > span + span { margin-left: 14px; }
+  #map-svg .link { stroke: #30363d; stroke-opacity: 0.5; transition: stroke 0.2s; }
+  #map-svg .link.active { stroke: #58a6ff; stroke-opacity: 1; }
+  #map-svg .node circle { cursor: pointer; transition: stroke-width 0.15s; stroke: #161b22; stroke-width: 1.5; }
+  #map-svg .node:hover circle { stroke: #e6edf3; stroke-width: 2.5; }
+  #map-svg .node text { fill: #e6edf3; font-size: 10px; pointer-events: none; font-family: inherit; }
+  #map-svg .node text.muted { fill: #8b949e; }
+  .ws-indicator {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-faint); margin-right: 6px;
+  }
+  .ws-indicator.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .ws-indicator.disconnected { background: var(--danger); }
+  /* Click-to-filter cell */
+  td.clickable { cursor: pointer; }
+  td.clickable:hover { background: var(--accent-dim) !important; color: var(--accent); }
+  /* Clickable dashboard cards */
+  .clickable-card { cursor: pointer; transition: transform .12s, border-color .12s; }
+  .clickable-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .panel-head h3 { font-size: 12px; text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.5px; font-weight: 600; }
+  /* Active filter chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--accent-dim); border: 1px solid var(--accent);
+    color: var(--accent); padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 500; cursor: default;
+  }
+  .chip .x {
+    cursor: pointer; color: var(--text-dim); margin-left: 2px;
+    font-weight: 700; line-height: 1;
+  }
+  .chip .x:hover { color: var(--danger); }
+  .chip .field { color: var(--text-faint); font-weight: 400; text-transform: uppercase; font-size: 9px; }
+  .chip.neg { background: rgba(248,81,73,0.12); border-color: var(--danger); color: var(--danger); }
+  .filter-bar {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .filter-bar label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .filter-bar select, .filter-bar input { padding: 5px 8px; font-size: 12px; min-width: 0; }
+  /* Rate cells */
+  .rate-up   { color: #58a6ff; font-variant-numeric: tabular-nums; }
+  .rate-down { color: #3fb950; font-variant-numeric: tabular-nums; }
+  .rate-zero { color: var(--text-faint); }
+  /* Group rows */
+  tr.group-row td {
+    background: var(--surface-2); font-weight: 600;
+    border-top: 1px solid var(--border); cursor: pointer;
+  }
+  tr.group-row:hover td { background: var(--surface-3); }
+  tr.group-row td .caret { display: inline-block; width: 12px; color: var(--text-dim); }
+  tr.collapsed { display: none; }
+  /* Sortable headers */
+  th[data-sort] { user-select: none; }
+  th[data-sort].active { color: var(--accent); }
+  th[data-sort].active::after {
+    content: " ▾"; font-size: 9px;
+  }
+  th[data-sort].active.asc::after { content: " ▴"; }
+  /* Compact bar chart inside a cell */
+  .minibar {
+    display: inline-block; width: 50px; height: 6px;
+    background: var(--surface-3); border-radius: 3px; vertical-align: middle;
+    margin-right: 6px; overflow: hidden;
+  }
+  .minibar > span { display: block; height: 100%; background: var(--accent); }
+  .dir-arrow.up   { color: #58a6ff; }
+  .dir-arrow.down { color: #3fb950; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo"><span id="logo-dot" class="dot"></span>NetMon</div>
+  <nav class="nav">
+    <a data-tab="dashboard" class="active"><span class="icon">▦</span> Dashboard</a>
+    <a data-tab="live"><span class="icon">⚡</span> Live Connections</a>
+    <a data-tab="map"><span class="icon">🗺</span> Network Map</a>
+    <a data-tab="processes"><span class="icon">⚙</span> Processes</a>
+    <a data-tab="domains"><span class="icon">🌐</span> Domains</a>
+    <a data-tab="rules"><span class="icon">📜</span> Rules</a>
+    <a data-tab="blocked"><span class="icon">⛔</span> Blocked</a>
+    <a data-tab="history"><span class="icon">⏱</span> History</a>
+    <a data-tab="alerts"><span class="icon">🔔</span> Alerts</a>
+    <a data-tab="logs"><span class="icon">📝</span> Logs</a>
+    <a data-tab="settings"><span class="icon">⚙</span> Settings</a>
+  </nav>
+  <div class="sidebar-foot">
+    <span class="ws-indicator" id="ws-dot"></span><span id="ws-state">Connecting…</span><br>
+    Run as Admin / root.
+  </div>
+</aside>
+
+<main>
+  <header class="topbar">
+    <select id="iface" style="min-width: 240px;"></select>
+    <button id="btn-start" class="primary">▶ Start</button>
+    <button id="btn-pause">⏸ Pause</button>
+    <button id="btn-stop">⏹ Stop</button>
+    <button id="btn-clear" class="ghost">⟲ Clear</button>
+    <span class="vsep"></span>
+    <button id="btn-pcap">● Record PCAP</button>
+    <span class="vsep"></span>
+    <input type="text" id="bpf" placeholder="BPF filter (e.g. port 443 and not host 1.1.1.1)" style="min-width: 320px;">
+    <button id="bpf-apply" class="ghost small">Apply BPF</button>
+    <span class="spacer"></span>
+    <input type="text" id="filter" placeholder="🔍  Filter…" style="min-width: 260px;">
+    <span id="status-pill" class="pill">Idle</span>
+  </header>
+
+  <div class="content">
+
+    <section id="tab-dashboard" class="tab active">
+      <div class="panel-head" style="margin-bottom:8px;">
+        <h3>Overview · click any card to drill in</h3>
+        <div>
+          <button id="dash-export-ai" class="primary small" title="Download a JSON snapshot suitable for LLM analysis">📋 Export AI snapshot</button>
+          <button id="dash-customize" class="ghost small">⚙ Customize</button>
+        </div>
+      </div>
+      <div class="cards" id="dash-cards">
+        <div class="card clickable-card" data-card="sent" data-jump="live" data-preset-dir="up"
+             title="Bytes uploaded to PUBLIC (internet) hosts. Excludes loopback (127.x) and LAN/RFC1918. Click to see uploading flows.">
+          <label>Uploaded (WAN)</label>
+          <div class="value" id="c-sent">0 B</div>
+          <div class="sub" id="c-sent-rate">↑ 0 B/s</div>
+          <div class="sub" style="font-size:10px;color:var(--text-faint);" id="c-sent-all">all: 0 B</div>
+        </div>
+        <div class="card success clickable-card" data-card="recv" data-jump="live" data-preset-dir="down"
+             title="Bytes downloaded from PUBLIC (internet) hosts. Excludes loopback and LAN. Click to see downloading flows.">
+          <label>Downloaded (WAN)</label>
+          <div class="value" id="c-recv">0 B</div>
+          <div class="sub" id="c-recv-rate">↓ 0 B/s</div>
+          <div class="sub" style="font-size:10px;color:var(--text-faint);" id="c-recv-all">all: 0 B</div>
+        </div>
+        <div class="card clickable-card" data-card="flows" data-jump="live"
+             title="Distinct 5-tuple flows currently tracked (TCP/UDP sessions seen in the last few minutes). Click to view live list.">
+          <label>Active flows</label>
+          <div class="value" id="c-flows">0</div>
+          <div class="sub">5-tuple sessions live now</div>
+        </div>
+        <div class="card clickable-card" data-card="procs" data-jump="processes"
+             title="Distinct processes (by PID) observed sending or receiving on the network. Click to open Processes tab.">
+          <label>Processes</label>
+          <div class="value" id="c-procs">0</div>
+          <div class="sub">apps with network activity</div>
+        </div>
+        <div class="card warning clickable-card" data-card="doms" data-jump="domains"
+             title="Distinct hostnames learned from DNS / TLS SNI / HTTP Host headers / reverse DNS. Click to open Domains tab.">
+          <label>Domains</label>
+          <div class="value" id="c-doms">0</div>
+          <div class="sub">hosts contacted</div>
+        </div>
+        <div class="card danger clickable-card" data-card="blocked" data-jump="blocked"
+             title="IPs currently blocked at firewall layer. Click to manage block list.">
+          <label>Blocked IPs</label>
+          <div class="value" id="c-blocked">0</div>
+          <div class="sub">in firewall right now</div>
+        </div>
+        <div class="card clickable-card" data-card="rules" data-jump="rules"
+             title="Declarative firewall + alert rules currently loaded. Click to manage rules.">
+          <label>Rules</label>
+          <div class="value" id="c-rules">0</div>
+          <div class="sub">block / alert rules</div>
+        </div>
+        <div class="card warning clickable-card" data-card="alerts" data-jump="alerts"
+             title="Alerts raised by NetMon (bandwidth spikes, new processes, custom rules). Click to view.">
+          <label>Alerts</label>
+          <div class="value" id="c-alerts">0</div>
+          <div class="sub">events to review</div>
+        </div>
+      </div>
+
+      <div id="dash-custom" class="panel" style="display:none;">
+        <h3 style="margin-bottom:8px;">Customize</h3>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;">Visible cards</div>
+          <div id="dash-custom-list" class="row"></div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;">Widgets</div>
+          <div id="widget-custom-list" class="row"></div>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="opt-compact"> Compact rows (smaller text + padding)</label>
+          <label style="color:var(--text-dim);margin-left:14px;">UI scale</label>
+          <select id="opt-scale">
+            <option value="0.85">85% (tiny)</option>
+            <option value="0.92">92%</option>
+            <option value="1"   selected>100%</option>
+            <option value="1.1">110%</option>
+            <option value="1.2">120% (large)</option>
+          </select>
+          <label style="color:var(--text-dim);margin-left:14px;">Theme</label>
+          <select id="opt-theme">
+            <option value="dark" selected>Dark</option>
+            <option value="midnight">Midnight</option>
+            <option value="light">Light</option>
+          </select>
+          <button id="opt-shortcuts" class="ghost small" style="margin-left:14px;">⌨ Shortcuts</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">All settings saved to your browser only.</div>
+      </div>
+      <div class="grid grid-2">
+        <div class="panel">
+          <div class="panel-head"><h3>Bandwidth · last 60s</h3></div>
+          <div class="chart-box"><canvas id="chart-bw"></canvas></div>
+        </div>
+        <div>
+          <div class="panel" data-widget="top-procs">
+            <div class="panel-head"><h3>Top processes (click to filter)</h3></div>
+            <table><thead><tr>
+              <th>Process</th>
+              <th class="num">↑/s</th><th class="num">↓/s</th>
+              <th class="num">Total</th>
+            </tr></thead>
+              <tbody id="top-procs"><tr><td colspan="4" class="empty">No data yet</td></tr></tbody>
+            </table>
+          </div>
+          <div class="panel" data-widget="top-doms">
+            <div class="panel-head"><h3>Top domains</h3></div>
+            <table><thead><tr><th>Domain</th><th class="num">Hits</th></tr></thead>
+              <tbody id="top-doms"><tr><td colspan="2" class="empty">No data yet</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:12px;">
+        <div class="panel" data-widget="top-countries">
+          <div class="panel-head"><h3>Top countries (click to filter)</h3></div>
+          <table><thead><tr><th>Country</th><th class="num">Flows</th><th class="num">Traffic</th></tr></thead>
+            <tbody id="top-countries"><tr><td colspan="3" class="empty">No data yet</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel" data-widget="top-ports">
+          <div class="panel-head"><h3>Top remote ports</h3></div>
+          <table><thead><tr><th>Port</th><th>Common name</th><th class="num">Flows</th></tr></thead>
+            <tbody id="top-ports"><tr><td colspan="3" class="empty">No data yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:12px;">
+        <div class="panel" data-widget="suspicious">
+          <div class="panel-head"><h3>⚠ Suspicious processes (click to investigate)</h3></div>
+          <table><thead><tr>
+            <th>Process</th><th class="num">Score</th><th>Why</th>
+          </tr></thead>
+            <tbody id="suspicious-procs"><tr><td colspan="3" class="empty">No suspicious activity right now.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel" data-widget="storage">
+          <div class="panel-head"><h3>What NetMon stores locally</h3></div>
+          <div style="font-size:12px;line-height:1.7;color:var(--text-dim);">
+            <div><b style="color:var(--text);">SQLite</b> <code>netmon.db</code> (always on) —
+              packets metadata <span class="cc">(ts, src, sport, dst, dport, proto, length, pid, process, domain)</span>,
+              DNS answers, blocked IPs, alerts, rules.</div>
+            <div style="margin-top:6px;"><b style="color:var(--text);">In-memory</b> — active flows (pruned 5 min idle),
+              process counters, per-IP GeoIP cache (≤50k), bandwidth buckets.</div>
+            <div style="margin-top:6px;"><b style="color:var(--text);">PCAP</b> = packet capture file (Wireshark format,
+              <code>.pcap</code>) containing every byte on the wire. <em>Off by default</em>;
+              click <button class="ghost small" id="storage-pcap-jump">● Record PCAP</button>
+              to start. PCAPs are big — only enable if you need byte-level inspection.</div>
+            <div class="hint" style="margin-top:6px;">No data leaves your machine except GeoIP lookups to ip-api.com
+              (disable in <a href="#" id="storage-geo-toggle" style="color:var(--accent);">Settings</a>).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:12px;">
+        <div class="panel" data-widget="top-hosts">
+          <div class="panel-head"><h3>Top remote hosts by traffic</h3></div>
+          <table><thead><tr><th>Host / IP</th><th>🌍</th><th class="num">↑/s</th><th class="num">↓/s</th><th class="num">Total</th></tr></thead>
+            <tbody id="top-hosts"><tr><td colspan="5" class="empty">No data yet</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel" data-widget="threats">
+          <div class="panel-head"><h3>Threat / risk summary</h3></div>
+          <div id="threat-summary" style="padding:8px 0; line-height:1.8; font-size:13px;">
+            <div>Flagged remote IPs: <span id="t-flagged" style="color:var(--danger);font-weight:600;">0</span></div>
+            <div>Blocked IPs hit just now: <span id="t-blocked-live" style="color:var(--warning);font-weight:600;">0</span></div>
+            <div>Connections to public IPs: <span id="t-public" style="color:var(--accent);font-weight:600;">0</span></div>
+            <div>Encrypted flows (port 443/SNI): <span id="t-tls" style="color:var(--success);font-weight:600;">0</span></div>
+            <div>Cleartext flows (port 80/21/23): <span id="t-clear" style="color:var(--warning);font-weight:600;">0</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-live" class="tab">
+      <h2>Live Connections <span id="live-count" class="badge"></span></h2>
+
+      <div class="filter-bar">
+        <label>Proto</label>
+        <select id="f-proto"><option value="">all</option><option>TCP</option><option>UDP</option></select>
+        <label>Direction</label>
+        <select id="f-dir">
+          <option value="">all</option>
+          <option value="up">uploading (↑)</option>
+          <option value="down">downloading (↓)</option>
+          <option value="both">both active</option>
+          <option value="idle">idle</option>
+        </select>
+        <label>Scope</label>
+        <select id="f-scope">
+          <option value="">all</option>
+          <option value="public">public only</option>
+          <option value="private">private only</option>
+          <option value="threat">threat / flagged</option>
+          <option value="blocked">blocked</option>
+        </select>
+        <label>Min rate</label>
+        <select id="f-minrate">
+          <option value="0">any</option>
+          <option value="1024">≥ 1 KB/s</option>
+          <option value="10240">≥ 10 KB/s</option>
+          <option value="102400">≥ 100 KB/s</option>
+          <option value="1048576">≥ 1 MB/s</option>
+        </select>
+        <label>Group</label>
+        <select id="f-group">
+          <option value="">flat</option>
+          <option value="process">by process</option>
+          <option value="domain">by domain</option>
+          <option value="country">by country</option>
+        </select>
+        <label class="check" style="margin-left:8px"><input type="checkbox" id="f-pause"> Pause UI</label>
+        <button id="f-clear" class="ghost small">Clear all</button>
+        <button id="f-export" class="ghost small" title="Export visible rows as CSV">Export</button>
+      </div>
+
+      <div class="filter-bar" style="padding:6px 12px; gap:6px;">
+        <label style="margin-right:4px;">Presets</label>
+        <button class="ghost small" data-preset="https">HTTPS</button>
+        <button class="ghost small" data-preset="http">HTTP</button>
+        <button class="ghost small" data-preset="dns">DNS</button>
+        <button class="ghost small" data-preset="p2p">P2P / high ports</button>
+        <button class="ghost small" data-preset="public">Public only</button>
+        <button class="ghost small" data-preset="threats">Threats</button>
+        <button class="ghost small" data-preset="active">Active now</button>
+        <span class="spacer"></span>
+        <span class="hint">Click presets to apply — combine with chips.</span>
+      </div>
+
+      <div id="chip-bar" class="chips" style="margin-bottom:10px;"></div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th data-sort="proto">Proto</th>
+            <th>Local</th><th class="num">Port</th>
+            <th data-sort="raddr">Remote</th><th class="num" data-sort="rport">Port</th>
+            <th title="Country" data-sort="country_code">🌍</th>
+            <th data-sort="host">Host / Domain</th>
+            <th class="num" data-sort="pid">PID</th>
+            <th data-sort="process">Process</th>
+            <th class="num" data-sort="rate_sent">↑ B/s</th>
+            <th class="num" data-sort="rate_recv">↓ B/s</th>
+            <th class="num" data-sort="sent">↑ Total</th>
+            <th class="num" data-sort="recv">↓ Total</th>
+            <th data-sort="last" class="active">Last</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="live-tbody"><tr><td colspan="15" class="empty">No connections yet. Click Start.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="details" id="live-details">Click a row to see details. Click any cell value to filter.</div>
+    </section>
+
+    <section id="tab-map" class="tab">
+      <h2>Network Map <span id="map-count" class="badge"></span></h2>
+      <div class="panel" style="padding: 8px 12px;">
+        <div class="row" style="font-size: 12px; color: var(--text-dim);">
+          <span><span class="legend-dot" style="background:#58a6ff"></span> Process</span>
+          <span><span class="legend-dot" style="background:#3fb950"></span> Local host</span>
+          <span><span class="legend-dot" style="background:#d29922"></span> Remote host</span>
+          <span><span class="legend-dot" style="background:#f85149"></span> Blocked / risky</span>
+          <span class="spacer"></span>
+          <label class="check"><input type="checkbox" id="map-public-only"> Public IPs only</label>
+          <button id="map-freeze" class="ghost small">Freeze layout</button>
+          <button id="map-reset" class="ghost small">Reset</button>
+        </div>
+      </div>
+      <div id="map-container" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);height:calc(100vh - 260px);position:relative;overflow:hidden;">
+        <svg id="map-svg" style="width:100%;height:100%;display:block;"></svg>
+        <div id="map-tooltip" style="position:absolute;pointer-events:none;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--text);display:none;max-width:300px;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.5);"></div>
+      </div>
+    </section>
+
+    <section id="tab-processes" class="tab">
+      <h2>Processes <span id="proc-count" class="badge"></span></h2>
+      <div class="filter-bar">
+        <label>Activity</label>
+        <select id="pf-activity">
+          <option value="">all</option>
+          <option value="active">active now (rate&gt;0)</option>
+          <option value="upload">uploading</option>
+          <option value="download">downloading</option>
+        </select>
+        <label>Min total</label>
+        <select id="pf-min">
+          <option value="0">any</option>
+          <option value="10240">≥ 10 KB</option>
+          <option value="1048576">≥ 1 MB</option>
+          <option value="10485760">≥ 10 MB</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th class="num">PID</th><th>Process</th>
+            <th class="num">↑ B/s</th><th class="num">↓ B/s</th>
+            <th class="num">Sent</th><th class="num">Received</th>
+            <th class="num">Flows</th><th class="num">Remote IPs</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="proc-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-domains" class="tab">
+      <h2>Domains</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domain</th><th class="num">Hits</th><th></th></tr></thead>
+          <tbody id="dom-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-rules" class="tab">
+      <h2>Rules <span id="rules-count" class="badge"></span></h2>
+      <div class="panel">
+        <h3 style="margin-bottom: 10px;">Add rule</h3>
+        <div class="row">
+          <input type="text" id="rule-name" placeholder="Rule name (optional)" style="min-width:180px">
+          <select id="rule-type">
+            <option value="process">Process name contains</option>
+            <option value="country">Country code (US, CN, RU…)</option>
+            <option value="asn">ASN (e.g. AS15169)</option>
+            <option value="cidr">IP or CIDR (e.g. 1.2.3.0/24)</option>
+            <option value="port">Remote port</option>
+          </select>
+          <input type="text" id="rule-value" placeholder="Match value" style="min-width:160px">
+          <select id="rule-action">
+            <option value="block">Block</option>
+            <option value="alert">Alert only</option>
+          </select>
+          <button id="rule-add" class="primary">Add rule</button>
+        </div>
+        <div class="hint">
+          Rules apply to outbound connections when the flow is first seen.
+          Examples: process=chrome / country=CN / asn=AS15169 / cidr=10.0.0.0/8 / port=23
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>On</th>
+            <th>Name</th>
+            <th>Match</th>
+            <th>Value</th>
+            <th>Action</th>
+            <th class="num">Hits</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="rule-tbody"><tr><td colspan="7" class="empty">No rules yet.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-blocked" class="tab">
+      <h2>Blocked</h2>
+      <div class="panel">
+        <div class="row">
+          <input type="text" id="block-ip-input" placeholder="IP address">
+          <button id="block-ip-btn" class="danger">Block IP</button>
+          <span class="vsep"></span>
+          <input type="text" id="block-dom-input" placeholder="Domain">
+          <button id="block-dom-btn" class="danger">Resolve & block</button>
+        </div>
+      </div>
+
+      <h3 style="margin-top:20px;">Custom DNS</h3>
+      <div class="panel">
+        <div class="row">
+          <label style="color:var(--text-dim);">Interface:</label>
+          <select id="dns-iface" style="min-width:240px;"></select>
+          <button id="dns-refresh" class="ghost small">Refresh state</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <label style="color:var(--text-dim);">Preset:</label>
+          <select id="dns-preset">
+            <option value="">— pick a provider —</option>
+            <option value="94.140.14.14|94.140.15.15">AdGuard (ads + trackers)</option>
+            <option value="94.140.14.15|94.140.15.16">AdGuard Family (ads + adult)</option>
+            <option value="94.140.14.140|94.140.14.141">AdGuard Non-filtering</option>
+            <option value="1.1.1.1|1.0.0.1">Cloudflare</option>
+            <option value="1.1.1.2|1.0.0.2">Cloudflare Malware</option>
+            <option value="1.1.1.3|1.0.0.3">Cloudflare Family (malware + adult)</option>
+            <option value="9.9.9.9|149.112.112.112">Quad9 (malware filter)</option>
+            <option value="8.8.8.8|8.8.4.4">Google</option>
+            <option value="208.67.222.222|208.67.220.220">OpenDNS</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <input type="text" id="dns-primary" placeholder="Primary DNS (e.g. 1.1.1.1)" style="width:170px;">
+          <input type="text" id="dns-secondary" placeholder="Secondary (optional)" style="width:170px;">
+          <button id="dns-apply" class="primary">Apply</button>
+          <button id="dns-reset-dhcp" class="ghost">Reset to DHCP</button>
+        </div>
+        <div id="dns-state" style="margin-top:10px;color:var(--text-dim);font-family:'SF Mono','Consolas',monospace;font-size:11px;white-space:pre-wrap;"></div>
+      </div>
+
+      <h3 style="margin-top:20px;">Ad-block list import</h3>
+      <div class="panel">
+        <div class="row" style="flex-wrap:wrap;">
+          <label style="color:var(--text-dim);">Presets:</label>
+          <button class="ghost small dns-preset-list" data-url="https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts">StevenBlack hosts</button>
+          <button class="ghost small dns-preset-list" data-url="https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts">StevenBlack (fakenews + gambling + porn)</button>
+          <button class="ghost small dns-preset-list" data-url="https://adaway.org/hosts.txt">AdAway hosts</button>
+          <button class="ghost small dns-preset-list" data-url="https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext">Peter Lowe ad-servers</button>
+          <button class="ghost small dns-preset-list" data-url="https://easylist.to/easylist/easylist.txt">EasyList</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <input type="text" id="adblock-url" placeholder="Custom list URL (hosts file or AdGuard format)" style="flex:1;min-width:300px;">
+          <button id="adblock-url-btn" class="primary">Import & Block</button>
+        </div>
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;color:var(--text-dim);">Paste domains (one per line)</summary>
+          <textarea id="adblock-paste" placeholder="ads.example.com&#10;tracker.example.net&#10;||doubleclick.net^&#10;0.0.0.0 advert.example" style="width:100%;min-height:140px;margin-top:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:8px;font-family:'SF Mono','Consolas',monospace;font-size:11px;"></textarea>
+          <div class="row" style="margin-top:8px;">
+            <button id="adblock-paste-btn" class="primary">Block these domains</button>
+          </div>
+        </details>
+        <div id="adblock-progress" style="margin-top:10px;color:var(--text-dim);font-size:12px;"></div>
+        <div style="margin-top:8px;color:var(--text-faint);font-size:11px;">
+          Tip: if you set AdGuard / Cloudflare-Malware DNS above, the upstream resolver already filters ads — importing a list becomes redundant but adds a belt-and-suspenders local block. Capped at 10,000 domains per import to avoid resolver overload.
+        </div>
+      </div>
+
+      <h3 style="margin-top:20px;">Blocked IPs</h3>
+      <div class="table-wrap">
+        <table><thead><tr><th>Blocked IP</th><th></th></tr></thead>
+          <tbody id="blk-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-history" class="tab">
+      <h2>History</h2>
+      <div class="panel">
+        <div class="row">
+          <label style="color: var(--text-dim);">Range:</label>
+          <select id="hist-range">
+            <option value="300">5 minutes</option>
+            <option value="1800">30 minutes</option>
+            <option value="3600" selected>1 hour</option>
+            <option value="21600">6 hours</option>
+            <option value="86400">24 hours</option>
+            <option value="604800">7 days</option>
+            <option value="999999999">All time</option>
+          </select>
+          <input type="text" id="hist-q" placeholder="Search…">
+          <button id="hist-go" class="primary">Search</button>
+          <button id="hist-export">Export CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Time</th><th>Proto</th>
+            <th>Src</th><th class="num">Sport</th>
+            <th>Dst</th><th class="num">Dport</th>
+            <th class="num">Len</th>
+            <th class="num">PID</th><th>Process</th><th>Domain</th>
+          </tr></thead>
+          <tbody id="hist-tbody"><tr><td colspan="10" class="empty">Click Search to load.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-logs" class="tab">
+      <h2>Logs <span id="log-count" class="badge"></span></h2>
+      <div class="filter-bar">
+        <label>Search</label>
+        <input type="text" id="log-q" placeholder="filter lines…" style="min-width:240px">
+        <label>Level</label>
+        <select id="log-level">
+          <option value="">all</option>
+          <option value="error">error</option>
+          <option value="warn">warn</option>
+          <option value="info">info</option>
+          <option value="debug">debug</option>
+        </select>
+        <label>Limit</label>
+        <select id="log-limit">
+          <option value="200">200</option>
+          <option value="500" selected>500</option>
+          <option value="1000">1000</option>
+          <option value="2000">2000</option>
+        </select>
+        <label class="check"><input type="checkbox" id="log-auto" checked> Auto refresh</label>
+        <button id="log-refresh" class="ghost small">Refresh</button>
+        <button id="log-export" class="ghost small">Export .txt</button>
+        <label class="check" style="margin-left:14px;"><input type="checkbox" id="log-debug"> Debug-level logging</label>
+      </div>
+      <pre id="log-viewer" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;max-height:calc(100vh - 280px);overflow:auto;font-size:11px;line-height:1.45;font-family:'SF Mono','Consolas',monospace;white-space:pre-wrap;word-break:break-all;">Loading…</pre>
+    </section>
+
+    <section id="tab-settings" class="tab">
+      <h2>Settings</h2>
+      <div class="panel">
+        <h3 style="margin-bottom:10px;">Storage</h3>
+        <label class="check"><input type="checkbox" id="set-log-packets">
+          Log every packet to <code>netmon.db</code> (huge file — flows are persisted regardless)
+        </label>
+        <div class="hint">Off by default. Each packet adds ~200 bytes; at 1000 pkt/s that's ~1 GB/hour. Leave off unless you need wireshark-level row-by-row replay.</div>
+        <div style="margin-top:12px;">
+          <label class="check"><input type="checkbox" id="set-geo">
+            Enable GeoIP enrichment (sends remote IPs to ip-api.com in batches)</label>
+        </div>
+        <div class="hint">When off: country / ASN / ISP columns stay empty, but no IP ever leaves your machine.</div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text-dim);">
+          DB write counters: <span id="set-db-writes" style="color:var(--text);">0</span> packets persisted ·
+          <span id="set-db-dropped" style="color:var(--danger);">0</span> dropped (queue full) ·
+          <span id="set-flows-persisted" style="color:var(--success);">0</span> flow records.
+        </div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:10px;">Data retention (auto-pruned hourly)</h3>
+        <div class="row" style="margin-bottom:8px;">
+          <label style="color:var(--text-dim);min-width:180px;">Keep <code>packets</code> for</label>
+          <input type="number" id="set-ret-packets" min="0" step="1" style="width:80px;"> days
+          <span class="hint">per-packet log</span>
+        </div>
+        <div class="row" style="margin-bottom:8px;">
+          <label style="color:var(--text-dim);min-width:180px;">Keep <code>flows</code>/<code>dns</code>/<code>alerts</code> for</label>
+          <input type="number" id="set-ret-archive" min="0" step="1" style="width:80px;"> days
+          <span class="hint">session history</span>
+        </div>
+        <div class="row">
+          <button id="set-ret-apply" class="primary small">Save retention</button>
+          <button id="set-prune-now" class="small">Prune now</button>
+          <button id="set-vacuum-now" class="small">VACUUM (reclaim space)</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">
+          0 = keep forever (no auto-prune). VACUUM runs automatically after any prune.
+          <code>netmon.log</code> rotates at 5 MB, gzipped, last 5 archives kept.
+        </div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:10px;">Default alerts</h3>
+        <button id="set-seed-defaults" class="primary small">Re-install recommended alerts</button>
+        <span class="hint" style="margin-left:8px;">Adds the 25 baseline rules from the Alerts tab. Existing rules are kept (deduped).</span>
+      </div>
+    </section>
+
+    <section id="tab-alerts" class="tab">
+      <h2>Alerts <span id="alert-count" class="badge"></span></h2>
+      <div class="panel">
+        <h3 style="margin-bottom: 10px;">Built-in alert toggles</h3>
+        <label class="check"><input type="checkbox" id="alert-newproc" checked>
+          Notify when a new process makes an outbound connection</label>
+        <div class="row" style="margin-top: 6px;">
+          <label style="color: var(--text-dim);">Alert if total bandwidth/sec exceeds:</label>
+          <input type="number" id="alert-bw" min="0" step="0.5" value="0" style="width: 90px;"> MB/s
+          <button id="alert-apply" class="primary small">Apply</button>
+          <span class="hint">(0 disables)</span>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <label class="check"><input type="checkbox" id="alert-toast" checked>
+            Show pop-up toast when a new alert fires</label>
+          <label class="check" style="margin-left:12px;"><input type="checkbox" id="alert-sound">
+            Play short beep on critical alerts</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Preset alert templates — one click adds a rule</h3>
+          <span class="hint">Sources: CISA AA20-245A, SANS ISC, exfiltration TTPs.</span>
+        </div>
+        <div id="preset-alerts" class="row" style="gap:8px;"></div>
+        <div class="hint" style="margin-top:8px;">
+          Click "Add" once per template — duplicates are deduped server-side by (match_type, match_value).
+          Switch each rule's action to "block" in the Rules tab if you want enforcement, not just notification.
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table><thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>
+          <tbody id="alert-tbody"><tr><td colspan="3" class="empty">No alerts.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="statusbar">
+    <span><span id="sb-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--text-faint);margin-right:6px;"></span><span id="sb-state">Idle</span></span>
+    <span>Iface: <span id="sb-iface" style="color:var(--text);">—</span></span>
+    <span>Packets: <span id="sb-pkts" style="color:var(--text);">0</span></span>
+    <span>↑ <span id="sb-up" style="color:var(--text);">0 B</span></span>
+    <span>↓ <span id="sb-down" style="color:var(--text);">0 B</span></span>
+    <span>Now: <span id="sb-rate" style="color:var(--text);">↑ 0 B/s ↓ 0 B/s</span></span>
+    <span>Flows: <span id="sb-flows" style="color:var(--text);">0</span></span>
+    <span id="sb-pcap" style="color: var(--danger); display: none;">⬢ PCAP recording</span>
+  </div>
+</main>
+
+<script>
+const state = {
+  tab: 'dashboard',
+  filter: '',
+  status: {},
+  liveFlows: [],          // pushed via WS, sorted by last desc
+  seenFlowKeys: new Set(),// for new-flow highlight
+  selected: null,
+  selectedKey: null,
+  ws: null,
+  wsConnected: false,
+
+  // Live tab filters
+  chips: [],              // [{field, value, negate}]
+  fProto:'', fDir:'', fScope:'', fMinRate:0, fGroup:'',
+  sortBy: 'last', sortAsc: false,
+  collapsed: new Set(),   // group keys that are collapsed
+  uiPaused: false,        // freeze Live table rendering
+
+  // Processes tab filters
+  pfActivity: '', pfMin: 0,
+};
+
+/* ---- Persisted prefs ---- */
+const PREF_KEY = 'netmon-prefs-v1';
+function savePrefs() {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify({
+      fProto: state.fProto, fDir: state.fDir, fScope: state.fScope,
+      fMinRate: state.fMinRate, fGroup: state.fGroup,
+      sortBy: state.sortBy, sortAsc: state.sortAsc,
+      chips: state.chips, uiPaused: state.uiPaused,
+      pfActivity: state.pfActivity, pfMin: state.pfMin,
+      hiddenCards: [...(state.hiddenCards || [])],
+      hiddenWidgets: [...(state.hiddenWidgets || [])],
+      alertToast: state.alertToast, alertSound: state.alertSound,
+      theme: state.theme, compact: state.compact, scale: state.scale,
+    }));
+  } catch {}
+}
+function loadPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+    Object.assign(state, p);
+    state.collapsed = new Set();
+    state.hiddenCards = new Set(p.hiddenCards || []);
+    state.hiddenWidgets = new Set(p.hiddenWidgets || []);
+    if (state.alertToast === undefined) state.alertToast = true;
+    if (state.alertSound === undefined) state.alertSound = false;
+    state.theme = p.theme || 'dark';
+    state.compact = !!p.compact;
+    state.scale = p.scale || 1;
+  } catch {
+    state.hiddenWidgets = new Set();
+  }
+}
+function applyTheme() {
+  document.body.setAttribute('data-theme', state.theme);
+  document.body.classList.toggle('compact', !!state.compact);
+  document.documentElement.style.fontSize = (state.scale * 13) + 'px';
+}
+
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+const flowKey = (c) => `${c.proto}|${c.laddr}:${c.lport}|${c.raddr}:${c.rport}`;
+
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  const u = ['B','KB','MB','GB','TB'];
+  let i = 0;
+  while (n >= 1024 && i < u.length-1) { n /= 1024; i++; }
+  return n.toFixed(1) + ' ' + u[i];
+}
+const fmtRate = (n) => fmtBytes(n) + '/s';
+const fmtTime = (ts) => new Date(ts).toLocaleTimeString();
+const fmtDateTime = (ts) => new Date(ts).toLocaleString();
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Convert a 2-letter country code to its flag emoji.
+function flagEmoji(cc) {
+  if (!cc || cc.length !== 2) return '';
+  const A = 0x1F1E6;
+  const a = 'A'.charCodeAt(0);
+  return String.fromCodePoint(
+    A + cc.toUpperCase().charCodeAt(0) - a,
+    A + cc.toUpperCase().charCodeAt(1) - a,
+  );
+}
+
+async function api(path, opts = {}) {
+  try {
+    const r = await fetch('/api' + path, {
+      headers: {'Content-Type': 'application/json'}, ...opts,
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) { toast(e.message, 'error'); return null; }
+}
+const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body || {}) });
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = 0; el.style.transform = 'translateX(20px)'; }, 2700);
+  setTimeout(() => el.remove(), 3000);
+}
+
+/* Tabs */
+$$('.nav a').forEach(a => a.addEventListener('click', (e) => {
+  e.preventDefault(); switchTab(a.dataset.tab);
+}));
+function switchTab(name) {
+  state.tab = name;
+  $$('.nav a').forEach(a => a.classList.toggle('active', a.dataset.tab === name));
+  $$('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
+  refreshCurrentTab();
+}
+
+/* WebSocket */
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+  state.ws = ws;
+  ws.onopen = () => {
+    state.wsConnected = true;
+    $('#ws-dot').classList.add('connected');
+    $('#ws-dot').classList.remove('disconnected');
+    $('#ws-state').textContent = 'Connected (live)';
+  };
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'status') {
+      state.status = msg.data;
+      renderStatus();
+    } else if (msg.type === 'flows') {
+      state.liveFlows = msg.data || [];
+      if (state.tab === 'live' && !state.uiPaused) renderLive();
+      else if (state.tab === 'map') renderMap();
+    }
+  };
+  ws.onclose = () => {
+    state.wsConnected = false;
+    $('#ws-dot').classList.remove('connected');
+    $('#ws-dot').classList.add('disconnected');
+    $('#ws-state').textContent = 'Reconnecting…';
+    setTimeout(connectWS, 1500);
+  };
+  ws.onerror = () => ws.close();
+}
+
+/* Status */
+function flashCard(id) {
+  const el = $(id).querySelector('.value');
+  if (!el) return;
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 250);
+}
+
+let lastSent = 0, lastRecv = 0;
+function renderStatus() {
+  const s = state.status;
+
+  const pill = $('#status-pill');
+  if (s.paused) { pill.textContent = '⏸ Paused'; pill.className = 'pill paused'; }
+  else if (s.running) { pill.textContent = '● Capturing'; pill.className = 'pill running live'; }
+  else { pill.textContent = 'Idle'; pill.className = 'pill'; }
+
+  const dot = $('#logo-dot');
+  dot.classList.toggle('live', s.running && !s.paused);
+  dot.classList.toggle('paused', !!s.paused);
+
+  if (s.total_sent !== lastSent) { flashCard('#c-sent'); lastSent = s.total_sent; }
+  if (s.total_recv !== lastRecv) { flashCard('#c-recv'); lastRecv = s.total_recv; }
+
+  $('#c-sent').textContent = fmtBytes(s.public_sent ?? s.total_sent);
+  $('#c-recv').textContent = fmtBytes(s.public_recv ?? s.total_recv);
+  const ca = $('#c-sent-all'); if (ca) ca.textContent = 'all: ' + fmtBytes(s.total_sent);
+  const cb = $('#c-recv-all'); if (cb) cb.textContent = 'all: ' + fmtBytes(s.total_recv);
+  $('#c-flows').textContent = s.active_flows || 0;
+  $('#c-procs').textContent = s.processes || 0;
+  $('#c-doms').textContent = s.domains || 0;
+  $('#c-blocked').textContent = s.blocked || 0;
+  const cr = $('#c-rules'); if (cr) cr.textContent = s.rules_count ?? 0;
+
+  const lastBw = s.bw_history?.[s.bw_history.length - 1] || [0,0,0];
+  $('#c-sent-rate').textContent = '↑ ' + fmtRate(lastBw[1]);
+  $('#c-recv-rate').textContent = '↓ ' + fmtRate(lastBw[2]);
+
+  const btn = $('#btn-pcap');
+  if (s.pcap_recording) { btn.textContent = '■ Stop PCAP'; btn.classList.add('danger'); }
+  else { btn.textContent = '● Record PCAP'; btn.classList.remove('danger'); }
+
+  // Capture button state binding
+  const bStart = $('#btn-start'), bPause = $('#btn-pause'), bStop = $('#btn-stop');
+  if (s.running) {
+    bStart.textContent = '● Running';
+    bStart.disabled = true;
+    bStart.classList.remove('primary');
+    bStart.classList.add('ghost');
+    bPause.disabled = false;
+    bPause.textContent = s.paused ? '▶ Resume' : '⏸ Pause';
+    bPause.classList.toggle('primary', !!s.paused);
+    bStop.disabled = false;
+  } else {
+    bStart.textContent = '▶ Start';
+    bStart.disabled = false;
+    bStart.classList.add('primary');
+    bStart.classList.remove('ghost');
+    bPause.disabled = true;
+    bPause.textContent = '⏸ Pause';
+    bPause.classList.remove('primary');
+    bStop.disabled = true;
+  }
+
+  $('#sb-dot').style.background = s.running && !s.paused
+    ? 'var(--success)' : (s.paused ? 'var(--warning)' : 'var(--text-faint)');
+  $('#sb-state').textContent = s.running ? (s.paused ? 'Paused' : 'Capturing') : 'Idle';
+  $('#sb-iface').textContent = s.iface || '(all)';
+  $('#sb-pkts').textContent = (s.total_packets || 0).toLocaleString();
+  $('#sb-up').textContent = fmtBytes(s.total_sent);
+  $('#sb-down').textContent = fmtBytes(s.total_recv);
+  $('#sb-rate').textContent = `↑ ${fmtRate(lastBw[1])}  ↓ ${fmtRate(lastBw[2])}`;
+  $('#sb-flows').textContent = s.active_flows || 0;
+  $('#sb-pcap').style.display = s.pcap_recording ? 'inline' : 'none';
+
+  if (state.tab === 'dashboard') {
+    renderChart();
+    renderTopLists();
+  }
+}
+
+/* Chart */
+let chart = null;
+function initChart() {
+  const ctx = $('#chart-bw').getContext('2d');
+  Chart.defaults.color = '#8b949e';
+  Chart.defaults.borderColor = '#30363d';
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Upload', data: [], borderColor: '#58a6ff',
+          backgroundColor: 'rgba(88,166,255,0.18)', fill: true,
+          tension: 0.35, borderWidth: 2, pointRadius: 0 },
+        { label: 'Download', data: [], borderColor: '#3fb950',
+          backgroundColor: 'rgba(63,185,80,0.18)', fill: true,
+          tension: 0.35, borderWidth: 2, pointRadius: 0 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#e6edf3', usePointStyle: true } },
+        tooltip: {
+          backgroundColor: '#161b22', borderColor: '#30363d',
+          borderWidth: 1, titleColor: '#e6edf3', bodyColor: '#e6edf3',
+          callbacks: { label: (c) => `${c.dataset.label}: ${fmtRate(c.parsed.y)}` }
+        }
+      },
+      scales: {
+        x: { grid: { color: '#21262d' }, ticks: { maxTicksLimit: 8 } },
+        y: { grid: { color: '#21262d' },
+             ticks: { callback: (v) => fmtBytes(v) + '/s' }, beginAtZero: true }
+      }
+    }
+  });
+}
+function renderChart() {
+  if (!chart) return;
+  const hist = state.status.bw_history || [];
+  chart.data.labels = hist.map((_, i) => `${-hist.length + i + 1}s`);
+  chart.data.datasets[0].data = hist.map(h => h[1]);
+  chart.data.datasets[1].data = hist.map(h => h[2]);
+  chart.update('none');
+}
+
+const PORT_NAMES = {
+  20:'FTP-data',21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',
+  67:'DHCP',68:'DHCP',69:'TFTP',80:'HTTP',88:'Kerberos',110:'POP3',
+  119:'NNTP',123:'NTP',135:'RPC',137:'NetBIOS',138:'NetBIOS',139:'NetBIOS',
+  143:'IMAP',161:'SNMP',162:'SNMP-trap',179:'BGP',389:'LDAP',443:'HTTPS',
+  445:'SMB',465:'SMTPS',500:'IKE',514:'syslog',515:'LPD',520:'RIP',
+  587:'SMTP-sub',636:'LDAPS',989:'FTPS',990:'FTPS',993:'IMAPS',995:'POP3S',
+  1080:'SOCKS',1194:'OpenVPN',1433:'MSSQL',1521:'Oracle',1701:'L2TP',
+  1723:'PPTP',1812:'RADIUS',1883:'MQTT',1900:'SSDP',2049:'NFS',2082:'cPanel',
+  2083:'cPanel-TLS',2086:'WHM',2087:'WHM-TLS',2222:'SSH-alt',2375:'docker',
+  2376:'docker-TLS',3000:'dev/grafana',3128:'squid',3306:'MySQL',
+  3389:'RDP',3478:'STUN',3690:'svn',4000:'dev',4040:'ngrok',4444:'meterpreter',
+  4500:'IPsec-NAT-T',5000:'dev/UPnP',5060:'SIP',5061:'SIPS',5222:'XMPP',
+  5269:'XMPP-s2s',5353:'mDNS',5432:'PostgreSQL',5500:'VNC-rev',5601:'Kibana',
+  5672:'AMQP',5683:'CoAP',5800:'VNC-http',5900:'VNC',5984:'CouchDB',
+  5985:'WinRM',5986:'WinRM-S',6379:'Redis',6443:'k8s-api',6660:'IRC',
+  6667:'IRC',6697:'IRC-TLS',7077:'spark',8000:'http-alt',8008:'http-alt',
+  8080:'http-proxy',8086:'InfluxDB',8088:'http-alt',8443:'https-alt',
+  8883:'MQTT-S',9000:'http/php-fpm',9001:'Tor',9042:'Cassandra',9050:'Tor',
+  9090:'Prometheus',9092:'Kafka',9100:'node_exporter',9200:'Elasticsearch',
+  9300:'Elasticsearch',11211:'memcached',27017:'MongoDB',
+  51820:'Wireguard',
+};
+
+/* Top lists - compute from liveFlows for instant updates */
+function renderTopLists() {
+  // Top procs with up/down rate split
+  const procMap = new Map();
+  for (const f of state.liveFlows) {
+    const key = f.process || `pid ${f.pid}`;
+    const x = procMap.get(key) || { up:0, dn:0, total:0 };
+    x.up += f.rate_sent || 0;
+    x.dn += f.rate_recv || 0;
+    x.total += f.sent + f.recv;
+    procMap.set(key, x);
+  }
+  const topP = [...procMap.entries()]
+    .sort((a,b) => (b[1].up+b[1].dn) - (a[1].up+a[1].dn) || b[1].total - a[1].total)
+    .slice(0, 8);
+  $('#top-procs').innerHTML = topP.length
+    ? topP.map(([n, x]) => `<tr>
+        <td class="clickable" data-pjump="${esc(n)}">${esc(n)}</td>
+        <td class="num ${x.up?'rate-up':'rate-zero'}">${x.up ? fmtBytes(x.up)+'/s' : '—'}</td>
+        <td class="num ${x.dn?'rate-down':'rate-zero'}">${x.dn ? fmtBytes(x.dn)+'/s' : '—'}</td>
+        <td class="num">${fmtBytes(x.total)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="empty">No data yet</td></tr>';
+  $('#top-procs').querySelectorAll('[data-pjump]').forEach(el => el.onclick = () => {
+    state.chips = [{ field: 'process', value: el.dataset.pjump, negate: false }];
+    switchTab('live');
+  });
+
+  // Top domains
+  api('/domains?limit=8').then(doms => {
+    if (!doms) return;
+    $('#top-doms').innerHTML = doms.length
+      ? doms.map(d => `<tr>
+          <td class="clickable" data-djump="${esc(d.domain)}">${esc(d.domain)}</td>
+          <td class="num">${d.hits}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="2" class="empty">No data yet</td></tr>';
+    $('#top-doms').querySelectorAll('[data-djump]').forEach(el => el.onclick = () => {
+      state.chips = [{ field: 'host', value: el.dataset.djump, negate: false }];
+      switchTab('live');
+    });
+  });
+
+  renderExtraWidgets();
+}
+
+function renderExtraWidgets() {
+  const flows = state.liveFlows || [];
+  // Top countries
+  const cm = new Map();
+  let flagged = 0, blockedLive = 0, pubCount = 0, tlsCount = 0, clearCount = 0;
+  for (const f of flows) {
+    const cc = f.country_code || (f.private ? 'LAN' : '—');
+    const x = cm.get(cc) || { flows: 0, bytes: 0 };
+    x.flows++; x.bytes += (f.sent + f.recv);
+    cm.set(cc, x);
+    if ((f.threat || 0) >= 2) flagged++;
+    if (f.blocked) blockedLive++;
+    if (!f.private) pubCount++;
+    if (f.rport === 443 || f.sni) tlsCount++;
+    if (f.rport === 80 || f.rport === 21 || f.rport === 23) clearCount++;
+  }
+  const topC = [...cm.entries()]
+    .sort((a,b) => b[1].bytes - a[1].bytes || b[1].flows - a[1].flows)
+    .slice(0, 8);
+  $('#top-countries').innerHTML = topC.length ? topC.map(([cc, x]) => `<tr>
+    <td class="clickable" data-cjump="${esc(cc)}">${flagEmoji(cc)} <span class="cc">${esc(cc)}</span></td>
+    <td class="num">${x.flows}</td>
+    <td class="num">${fmtBytes(x.bytes)}</td>
+  </tr>`).join('') : '<tr><td colspan="3" class="empty">No data yet</td></tr>';
+  $('#top-countries').querySelectorAll('[data-cjump]').forEach(el => el.onclick = () => {
+    const cc = el.dataset.cjump;
+    if (cc === '—' || cc === 'LAN') return;
+    state.chips = [{ field: 'country_code', value: cc, negate: false }];
+    switchTab('live');
+  });
+
+  // Top ports
+  const pm = new Map();
+  for (const f of flows) pm.set(f.rport, (pm.get(f.rport) || 0) + 1);
+  const topP = [...pm.entries()].sort((a,b) => b[1] - a[1]).slice(0, 8);
+  $('#top-ports').innerHTML = topP.length ? topP.map(([p, n]) => `<tr>
+    <td class="clickable" data-pjump="${esc(p)}">${p}</td>
+    <td style="color:var(--text-dim)">${esc(PORT_NAMES[p] || '')}</td>
+    <td class="num">${n}</td>
+  </tr>`).join('') : '<tr><td colspan="3" class="empty">No data yet</td></tr>';
+  $('#top-ports').querySelectorAll('[data-pjump]').forEach(el => el.onclick = () => {
+    state.chips = [{ field: 'rport', value: el.dataset.pjump, negate: false }];
+    switchTab('live');
+  });
+
+  // Top hosts
+  const hm = new Map();
+  for (const f of flows) {
+    const host = hostOf(f) || f.raddr;
+    const x = hm.get(host) || { up:0, dn:0, total:0, cc:f.country_code||'', raddr:f.raddr };
+    x.up += f.rate_sent || 0; x.dn += f.rate_recv || 0;
+    x.total += f.sent + f.recv;
+    hm.set(host, x);
+  }
+  const topH = [...hm.entries()]
+    .sort((a,b) => (b[1].up+b[1].dn) - (a[1].up+a[1].dn) || b[1].total - a[1].total)
+    .slice(0, 8);
+  $('#top-hosts').innerHTML = topH.length ? topH.map(([host, x]) => `<tr>
+    <td class="clickable" data-hjump="${esc(host)}">${esc(host)}</td>
+    <td>${x.cc ? flagEmoji(x.cc) + ' <span class="cc">'+esc(x.cc)+'</span>' : ''}</td>
+    <td class="num ${x.up?'rate-up':'rate-zero'}">${x.up ? fmtBytes(x.up)+'/s' : '—'}</td>
+    <td class="num ${x.dn?'rate-down':'rate-zero'}">${x.dn ? fmtBytes(x.dn)+'/s' : '—'}</td>
+    <td class="num">${fmtBytes(x.total)}</td>
+  </tr>`).join('') : '<tr><td colspan="5" class="empty">No data yet</td></tr>';
+  $('#top-hosts').querySelectorAll('[data-hjump]').forEach(el => el.onclick = () => {
+    state.chips = [{ field: 'host', value: el.dataset.hjump, negate: false }];
+    switchTab('live');
+  });
+
+  // Threat summary
+  const set = (id, v, color) => { const e = $(id); if (e) { e.textContent = v; if (color) e.style.color = color; } };
+  set('#t-flagged', flagged);
+  set('#t-blocked-live', blockedLive);
+  set('#t-public', pubCount);
+  set('#t-tls', tlsCount);
+  set('#t-clear', clearCount);
+
+  // Suspicious processes — heuristic score per process
+  const procMap = new Map();
+  for (const f of flows) {
+    const key = f.process || `pid ${f.pid}`;
+    const p = procMap.get(key) || { reasons: new Set(), score: 0, ports: new Set(), countries: new Set(), name: key };
+    if ((f.threat || 0) >= 2) { p.score += 3; p.reasons.add('flagged-IP'); }
+    if (f.blocked)            { p.score += 2; p.reasons.add('blocked'); }
+    if (SUSPICIOUS_PORTS.has(f.rport)) { p.score += 2; p.ports.add(f.rport); }
+    if (HIGH_RISK_COUNTRIES.has(f.country_code)) { p.score += 2; p.countries.add(f.country_code); }
+    // LOLBin processes that have any network activity at all
+    if (/^(powershell|cmd\.exe|rundll32|regsvr32|mshta|certutil|bitsadmin)/i.test(f.process || '')) {
+      p.score += 4; p.reasons.add('LOLBin egress');
+    }
+    // Unknown process name with public traffic
+    if ((!f.process || f.process === 'unknown') && !f.private) {
+      p.score += 1; p.reasons.add('unknown PID public traffic');
+    }
+    procMap.set(key, p);
+  }
+  const susp = [...procMap.values()].filter(p => p.score > 0)
+    .sort((a,b) => b.score - a.score).slice(0, 8);
+  const sb = $('#suspicious-procs');
+  if (sb) {
+    sb.innerHTML = susp.length ? susp.map(p => {
+      const reasons = [...p.reasons];
+      if (p.ports.size) reasons.push('ports: ' + [...p.ports].join(','));
+      if (p.countries.size) reasons.push('cc: ' + [...p.countries].join(','));
+      const color = p.score >= 6 ? 'var(--danger)' : p.score >= 3 ? 'var(--warning)' : 'var(--accent)';
+      return `<tr>
+        <td class="clickable" data-sjump="${esc(p.name)}">${esc(p.name)}</td>
+        <td class="num" style="color:${color};font-weight:600;">${p.score}</td>
+        <td style="font-size:11px;color:var(--text-dim);">${esc(reasons.join(' · '))}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="3" class="empty">No suspicious activity right now.</td></tr>';
+    sb.querySelectorAll('[data-sjump]').forEach(el => el.onclick = () => {
+      state.chips = [{ field: 'process', value: el.dataset.sjump, negate: false }];
+      switchTab('live');
+    });
+  }
+}
+
+/* ---- Live filters (chips + dropdowns) ---- */
+const CHIP_LABELS = {
+  process: 'process', pid: 'pid', proto: 'proto',
+  raddr: 'ip', lport: 'lport', rport: 'port',
+  country_code: 'country', asn: 'asn',
+  domain: 'host', sni: 'sni', http_host: 'host',
+};
+function hostOf(c) { return c.domain || c.sni || c.http_host || ''; }
+function flowDir(c) {
+  const s = c.rate_sent || 0, r = c.rate_recv || 0;
+  if (s > 0 && r > 0) return 'both';
+  if (s > 0) return 'up';
+  if (r > 0) return 'down';
+  return 'idle';
+}
+function flowMatchesChip(c, ch) {
+  const target = String(ch.value).toLowerCase().trim();
+  let hit = false;
+  if (ch.field === 'process') {
+    // Allow "pid N" pseudo-process: match by PID instead of name.
+    const m = /^pid\s+(\d+)$/i.exec(target);
+    if (m) hit = String(c.pid) === m[1];
+    else {
+      const pname = String(c.process || '').toLowerCase();
+      hit = pname === target || pname.includes(target);
+    }
+  } else if (ch.field === 'host') {
+    // Match any of: domain / SNI / HTTP Host / reverse-DNS / raw remote IP.
+    const fields = [c.domain, c.sni, c.http_host, c.raddr]
+      .map(v => String(v || '').toLowerCase());
+    hit = fields.some(v => v.includes(target));
+  } else if (ch.field === 'pid') {
+    hit = String(c.pid) === target;
+  } else if (ch.field === 'rport' || ch.field === 'lport') {
+    hit = String(c[ch.field]) === target;
+  } else if (ch.field === 'country_code') {
+    hit = String(c.country_code || '').toLowerCase() === target;
+  } else if (ch.field === 'raddr') {
+    hit = String(c.raddr || '').toLowerCase() === target ||
+          String(c.raddr || '').toLowerCase().includes(target);
+  } else {
+    const v = String(c[ch.field] ?? '').toLowerCase();
+    hit = v === target;
+  }
+  return ch.negate ? !hit : hit;
+}
+function applyLiveFilters(flows) {
+  const q = state.filter.toLowerCase().trim();
+  return flows.filter(c => {
+    if (state.fProto && c.proto !== state.fProto) return false;
+    if (state.fDir) {
+      const d = flowDir(c);
+      if (state.fDir === 'both' && d !== 'both') return false;
+      else if (state.fDir === 'up' && !(d === 'up' || d === 'both')) return false;
+      else if (state.fDir === 'down' && !(d === 'down' || d === 'both')) return false;
+      else if (state.fDir === 'idle' && d !== 'idle') return false;
+    }
+    if (state.fScope === 'public' && c.private) return false;
+    if (state.fScope === 'private' && !c.private) return false;
+    if (state.fScope === 'threat' && !(c.threat >= 2)) return false;
+    if (state.fScope === 'blocked' && !c.blocked) return false;
+    if (state.fMinRate > 0 && (c.rate_sent + c.rate_recv) < state.fMinRate) return false;
+    for (const ch of state.chips) if (!flowMatchesChip(c, ch)) return false;
+    if (q) {
+      const hay = [c.proto, c.laddr, c.lport, c.raddr, c.rport, hostOf(c),
+        c.pid, c.process, c.country_code, c.asn].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function sortLive(flows) {
+  const k = state.sortBy, asc = state.sortAsc;
+  const dir = asc ? 1 : -1;
+  const get = (c) => {
+    if (k === 'host') return hostOf(c) || '';
+    if (k === 'rate') return (c.rate_sent + c.rate_recv);
+    return c[k];
+  };
+  flows = [...flows];
+  flows.sort((a, b) => {
+    const av = get(a), bv = get(b);
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+  return flows;
+}
+
+function applyPreset(name) {
+  // Preset modifies dropdowns + chips. Doesn't wipe existing chips.
+  const setDD = (id, key, val) => {
+    state[key] = val; const el = $(id); if (el) el.value = String(val);
+  };
+  switch (name) {
+    case 'https':
+      setDD('#f-proto', 'fProto', 'TCP');
+      addChip('rport', '443');
+      break;
+    case 'http':
+      setDD('#f-proto', 'fProto', 'TCP');
+      addChip('rport', '80');
+      break;
+    case 'dns':
+      addChip('rport', '53');
+      break;
+    case 'p2p':
+      setDD('#f-minrate', 'fMinRate', 10240);
+      // No exact rport; rely on min-rate + UDP heuristic
+      setDD('#f-proto', 'fProto', 'UDP');
+      break;
+    case 'public':
+      setDD('#f-scope', 'fScope', 'public');
+      break;
+    case 'threats':
+      setDD('#f-scope', 'fScope', 'threat');
+      break;
+    case 'active':
+      setDD('#f-minrate', 'fMinRate', 1024);
+      setDD('#f-dir', 'fDir', 'both');
+      break;
+  }
+  savePrefs();
+  renderLive();
+}
+
+function addChip(field, value, opts={}) {
+  if (value == null || value === '') return;
+  value = String(value);
+  const existing = state.chips.find(c => c.field === field && c.value === value);
+  if (existing) { existing.negate = !!opts.negate; }
+  else state.chips.push({field, value, negate: !!opts.negate});
+  renderChips(); savePrefs();
+  if (state.tab === 'live') renderLive();
+}
+function removeChip(idx) {
+  state.chips.splice(idx, 1);
+  renderChips(); savePrefs();
+  if (state.tab === 'live') renderLive();
+}
+function renderChips() {
+  const bar = $('#chip-bar');
+  if (!bar) return;
+  if (!state.chips.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = state.chips.map((c, i) => {
+    const label = CHIP_LABELS[c.field] || c.field;
+    const sign = c.negate ? '≠' : '=';
+    // For process/country chips, also offer a quick Block action
+    const blockBtn = (!c.negate && (c.field === 'process' || c.field === 'country_code' || c.field === 'raddr'))
+      ? `<button class="small danger" data-chip-block="${i}" style="margin-left:8px;padding:1px 6px;font-size:10px;">Block</button>` : '';
+    return `<span class="chip ${c.negate?'neg':''}">
+      <span class="field">${esc(label)}</span> ${sign} ${esc(c.value)}
+      <span class="x" data-rm="${i}">✕</span></span>${blockBtn}`;
+  }).join('') + ' <button class="ghost small" id="chip-clear">Clear chips</button>';
+  bar.querySelectorAll('.x').forEach(x => x.onclick = () => removeChip(Number(x.dataset.rm)));
+  bar.querySelectorAll('button[data-chip-block]').forEach(b => b.onclick = async () => {
+    const c = state.chips[Number(b.dataset.chipBlock)];
+    if (!c) return;
+    if (c.field === 'raddr') {
+      const r = await post('/block', { ip: c.value });
+      if (r) toast(r.msg, r.ok ? 'success' : 'error');
+    } else if (c.field === 'process') {
+      // Find PID for this process and block its IPs
+      const procs = await api('/processes?limit=300');
+      if (!procs) return;
+      const match = procs.filter(p => p.name === c.value);
+      if (!match.length) { toast('Process not found in current list', 'error'); return; }
+      if (!confirm(`Block every remote IP that ${c.value} (${match.length} instance${match.length>1?'s':''}) has contacted?`)) return;
+      for (const m of match) {
+        const r = await post('/block', { pid: m.pid });
+        if (r) toast(r.msg, r.ok ? 'success' : 'error');
+      }
+    } else if (c.field === 'country_code') {
+      const name = (`Block country ${c.value}`);
+      const r = await post('/rules/add', { name, match_type: 'country', match_value: c.value, action: 'block' });
+      if (r?.ok) toast(`Country rule added (${c.value})`, 'success');
+      else toast(r?.msg || 'Failed', 'error');
+    }
+  });
+  const cb = $('#chip-clear');
+  if (cb) cb.onclick = () => { state.chips = []; renderChips(); savePrefs(); renderLive(); };
+}
+
+/* Live tab - rendered from state.liveFlows (push-driven) */
+function renderLive() {
+  let flows = applyLiveFilters(state.liveFlows);
+  flows = sortLive(flows);
+  $('#live-count').textContent = `${flows.length} / ${state.liveFlows.length}`;
+
+  // Sort header indicator
+  $$('th[data-sort]').forEach(th => {
+    th.classList.toggle('active', th.dataset.sort === state.sortBy);
+    th.classList.toggle('asc', th.dataset.sort === state.sortBy && state.sortAsc);
+  });
+
+  const newKeys = new Set();
+  const tbody = $('#live-tbody');
+  if (!flows.length) {
+    tbody.innerHTML = '<tr><td colspan="15" class="empty">No connections match the current filter.</td></tr>';
+    state.seenFlowKeys = newKeys;
+    return;
+  }
+
+  const renderRow = (c) => {
+    const k = flowKey(c);
+    newKeys.add(k);
+    const isNew = !state.seenFlowKeys.has(k);
+    const threatCls = c.threat >= 2 ? 'threat ' : '';
+    const cls = (c.blocked ? 'blocked ' : (c.private ? 'local ' : '')) +
+                threatCls +
+                (isNew ? 'new-flow ' : '') +
+                (state.selectedKey === k ? 'selected' : '');
+    const host = hostOf(c);
+    const hostBadge = c.sni ? '<span class="badge" style="margin-left:4px;background:rgba(63,185,80,.15);color:#3fb950">SNI</span>' :
+                      c.http_host ? '<span class="badge" style="margin-left:4px">HTTP</span>' : '';
+    const flag = c.country_code ? `<span title="${esc(c.country)}">${flagEmoji(c.country_code)}</span>` : '';
+    const upRate = c.rate_sent || 0, dnRate = c.rate_recv || 0;
+    const upCls = upRate ? 'rate-up'   : 'rate-zero';
+    const dnCls = dnRate ? 'rate-down' : 'rate-zero';
+    const dirArrows =
+      (upRate ? '<span class="dir-arrow up">↑</span>' : '') +
+      (dnRate ? '<span class="dir-arrow down">↓</span>' : '');
+    return `<tr class="${cls.trim()}" data-k="${esc(k)}">
+      <td class="clickable" data-fld="proto" data-val="${esc(c.proto)}"><span class="badge ${c.proto.toLowerCase()}">${c.proto}</span> ${dirArrows}</td>
+      <td>${esc(c.laddr)}</td><td class="num">${c.lport}</td>
+      <td class="clickable" data-fld="raddr" data-val="${esc(c.raddr)}">${esc(c.raddr)}</td>
+      <td class="num clickable" data-fld="rport" data-val="${esc(c.rport)}">${c.rport}</td>
+      <td class="clickable" data-fld="country_code" data-val="${esc(c.country_code || '')}">${flag} <span class="cc">${esc(c.country_code || '')}</span></td>
+      <td class="clickable" data-fld="host" data-val="${esc(host)}">${esc(host)}${hostBadge}</td>
+      <td class="num clickable" data-fld="pid" data-val="${esc(c.pid)}">${c.pid}</td>
+      <td class="clickable" data-fld="process" data-val="${esc(c.process || '')}">${esc(c.process)}</td>
+      <td class="num ${upCls}">${upRate ? fmtBytes(upRate)+'/s' : '—'}</td>
+      <td class="num ${dnCls}">${dnRate ? fmtBytes(dnRate)+'/s' : '—'}</td>
+      <td class="num">${fmtBytes(c.sent)}</td>
+      <td class="num">${fmtBytes(c.recv)}</td>
+      <td>${fmtTime(c.last)}</td>
+      <td><button class="small danger" data-block="${esc(c.raddr)}">Block</button></td>
+    </tr>`;
+  };
+
+  // Track ALL filtered flow keys so collapsed groups don't re-flash on expand
+  for (const c of flows) newKeys.add(flowKey(c));
+
+  let html = '';
+  if (state.fGroup) {
+    const groups = new Map();
+    const keyFn = state.fGroup === 'process' ? (c) => c.process || `pid ${c.pid}` :
+                  state.fGroup === 'domain'  ? (c) => hostOf(c) || c.raddr :
+                                                (c) => c.country_code || '—';
+    for (const c of flows) {
+      const k = keyFn(c);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(c);
+    }
+    const ranked = [...groups.entries()].map(([k, list]) => {
+      const ups = list.reduce((s,c)=>s+(c.rate_sent||0),0);
+      const dns = list.reduce((s,c)=>s+(c.rate_recv||0),0);
+      const ts = list.reduce((s,c)=>s+c.sent,0);
+      const tr = list.reduce((s,c)=>s+c.recv,0);
+      return {k, list, ups, dns, ts, tr};
+    }).sort((a,b)=> (b.ups+b.dns) - (a.ups+a.dns) || (b.ts+b.tr) - (a.ts+a.tr));
+
+    for (const g of ranked) {
+      const collapsed = state.collapsed.has(g.k);
+      const caret = collapsed ? '▸' : '▾';
+      const filterField = state.fGroup === 'process' ? 'process' :
+                          state.fGroup === 'domain'  ? 'host' : 'country_code';
+      html += `<tr class="group-row" data-grp="${esc(g.k)}">
+        <td colspan="9"><span class="caret">${caret}</span>
+          <span class="clickable" data-fld="${filterField}" data-val="${esc(g.k)}">${esc(g.k)}</span>
+          <span class="badge" style="margin-left:8px">${g.list.length}</span></td>
+        <td class="num rate-up">${g.ups ? fmtBytes(g.ups)+'/s' : '—'}</td>
+        <td class="num rate-down">${g.dns ? fmtBytes(g.dns)+'/s' : '—'}</td>
+        <td class="num">${fmtBytes(g.ts)}</td>
+        <td class="num">${fmtBytes(g.tr)}</td>
+        <td></td><td></td>
+      </tr>`;
+      if (!collapsed) html += g.list.map(renderRow).join('');
+    }
+  } else {
+    html = flows.map(renderRow).join('');
+  }
+  tbody.innerHTML = html;
+  state.seenFlowKeys = newKeys;
+
+  // Block buttons
+  tbody.querySelectorAll('button[data-block]').forEach(b => {
+    b.onclick = async (e) => {
+      e.stopPropagation();
+      const r = await post('/block', { ip: b.dataset.block });
+      if (r) toast(r.msg, r.ok ? 'success' : 'error');
+    };
+  });
+
+  // Click-to-filter cells
+  tbody.querySelectorAll('td.clickable, span.clickable').forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const fld = el.dataset.fld, val = el.dataset.val;
+      if (!fld || val == null || val === '') return;
+      addChip(fld, val, { negate: e.shiftKey });
+    };
+  });
+
+  // Group expand/collapse
+  tbody.querySelectorAll('tr.group-row').forEach(gr => {
+    gr.onclick = (e) => {
+      if (e.target.classList.contains('clickable')) return;
+      const k = gr.dataset.grp;
+      if (state.collapsed.has(k)) state.collapsed.delete(k);
+      else state.collapsed.add(k);
+      renderLive();
+    };
+  });
+
+  // Row select for details
+  tbody.querySelectorAll('tr:not(.group-row)').forEach(tr => {
+    tr.onclick = (e) => {
+      if (e.target.classList.contains('clickable')) return;
+      tbody.querySelectorAll('tr').forEach(x => x.classList.remove('selected'));
+      tr.classList.add('selected');
+      state.selectedKey = tr.dataset.k;
+      const c = flows.find(f => flowKey(f) === tr.dataset.k);
+      if (c) renderDetails(c);
+    };
+  });
+
+  if (state.selectedKey) {
+    const sel = flows.find(f => flowKey(f) === state.selectedKey);
+    if (sel) renderDetails(sel);
+  }
+}
+
+function renderDetails(c) {
+  const geoLine = (c.country_code || c.asn) ?
+    `<span class="k">Location:</span> <span class="v">${flagEmoji(c.country_code)} ${esc(c.country || '')} ${esc(c.city ? '· '+c.city : '')}</span> &nbsp;
+     <span class="k">ISP/Org:</span> <span class="v">${esc(c.isp || c.org || '—')}</span> &nbsp;
+     <span class="k">ASN:</span> <span class="v">${esc(c.asn || '—')}</span><br>` : '';
+  const hostLine = (c.sni || c.http_host) ?
+    `<span class="k">SNI:</span> <span class="v">${esc(c.sni || '—')}</span> &nbsp;
+     <span class="k">HTTP Host:</span> <span class="v">${esc(c.http_host || '—')}</span><br>` : '';
+  $('#live-details').innerHTML = `
+<span class="k">Flow:</span> <span class="v">${esc(c.proto)} ${esc(c.laddr)}:${c.lport} → ${esc(c.raddr)}:${c.rport}</span><br>
+<span class="k">Process:</span> <span class="v">${esc(c.process)} (PID ${c.pid})</span> &nbsp;
+<span class="k">Domain:</span> <span class="v">${esc(c.domain || '—')}</span><br>
+${hostLine}${geoLine}<span class="k">First seen:</span> <span class="v">${fmtDateTime(c.first)}</span> &nbsp;
+<span class="k">Last seen:</span> <span class="v">${fmtDateTime(c.last)}</span><br>
+<span class="k">Sent:</span> <span class="v">${fmtBytes(c.sent)}</span> &nbsp;
+<span class="k">Received:</span> <span class="v">${fmtBytes(c.recv)}</span> &nbsp;
+<span class="k">Status:</span> <span class="v" style="color: ${c.blocked ? 'var(--danger)' : 'var(--success)'}">${c.blocked ? 'BLOCKED' : 'allowed'}</span>${c.threat >= 2 ? ' <span class="v" style="color:var(--danger)">⚠ flagged</span>' : ''}`;
+}
+
+/* Processes / Domains / Blocked / Alerts (polled at 2.5s) */
+async function refreshProcesses() {
+  const q = state.filter ? `&q=${encodeURIComponent(state.filter)}` : '';
+  let procs = await api(`/processes?limit=300${q}`);
+  if (!procs) return;
+  // Client-side filters
+  procs = procs.filter(p => {
+    const total = p.sent + p.recv;
+    if (state.pfMin > 0 && total < state.pfMin) return false;
+    if (state.pfActivity === 'active' && !(p.rate_sent || p.rate_recv)) return false;
+    if (state.pfActivity === 'upload'   && !p.rate_sent) return false;
+    if (state.pfActivity === 'download' && !p.rate_recv) return false;
+    return true;
+  });
+  $('#proc-count').textContent = procs.length;
+  $('#proc-tbody').innerHTML = procs.length ? procs.map(p => {
+    const ru = p.rate_sent || 0, rd = p.rate_recv || 0;
+    return `<tr>
+      <td class="num">${p.pid}</td>
+      <td class="clickable" data-pname="${esc(p.name)}">${esc(p.name)}</td>
+      <td class="num ${ru?'rate-up':'rate-zero'}">${ru ? fmtBytes(ru)+'/s' : '—'}</td>
+      <td class="num ${rd?'rate-down':'rate-zero'}">${rd ? fmtBytes(rd)+'/s' : '—'}</td>
+      <td class="num">${fmtBytes(p.sent)}</td>
+      <td class="num">${fmtBytes(p.recv)}</td>
+      <td class="num">${p.conns}</td>
+      <td class="num">${p.remote_ips}</td>
+      <td>
+        <button class="small" data-pjump="${esc(p.name)}">View flows</button>
+        <button class="small danger" data-pid="${p.pid}">Block all IPs</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="empty">No processes match.</td></tr>';
+  $('#proc-tbody').querySelectorAll('button[data-pid]').forEach(b => {
+    b.onclick = async () => {
+      if (!confirm(`Block every remote IP this process has contacted?`)) return;
+      const r = await post('/block', { pid: Number(b.dataset.pid) });
+      if (r) toast(r.msg, r.ok ? 'success' : 'error');
+    };
+  });
+  $('#proc-tbody').querySelectorAll('button[data-pjump]').forEach(b => {
+    b.onclick = () => {
+      state.chips = [{ field: 'process', value: b.dataset.pjump, negate: false }];
+      switchTab('live');
+    };
+  });
+  $('#proc-tbody').querySelectorAll('td.clickable[data-pname]').forEach(td => {
+    td.onclick = () => {
+      state.chips = [{ field: 'process', value: td.dataset.pname, negate: false }];
+      switchTab('live');
+    };
+  });
+}
+
+async function refreshDomains() {
+  const q = state.filter ? `&q=${encodeURIComponent(state.filter)}` : '';
+  const doms = await api(`/domains?limit=500${q}`);
+  if (!doms) return;
+  $('#dom-tbody').innerHTML = doms.length ? doms.map(d => `<tr>
+    <td class="clickable" data-djump="${esc(d.domain)}">${esc(d.domain)}</td>
+    <td class="num">${d.hits}</td>
+    <td>
+      <button class="small" data-djump-btn="${esc(d.domain)}">View flows</button>
+      <button class="small danger" data-d="${esc(d.domain)}">Block</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="3" class="empty">No DNS observed yet.</td></tr>';
+  $('#dom-tbody').querySelectorAll('button[data-d]').forEach(b => {
+    b.onclick = async () => {
+      const r = await post('/block', { domain: b.dataset.d });
+      if (r) toast(r.msg, r.ok ? 'success' : 'error');
+    };
+  });
+  const jumpDom = (d) => {
+    state.chips = [{ field: 'host', value: d, negate: false }];
+    switchTab('live');
+  };
+  $('#dom-tbody').querySelectorAll('[data-djump]').forEach(el => el.onclick = () => jumpDom(el.dataset.djump));
+  $('#dom-tbody').querySelectorAll('[data-djump-btn]').forEach(el => el.onclick = () => jumpDom(el.dataset.djumpBtn));
+}
+
+async function refreshBlocked() {
+  const r = await api('/blocked');
+  if (!r) return;
+  $('#blk-tbody').innerHTML = r.ips.length ? r.ips.map(ip => `<tr>
+    <td>${esc(ip)}</td>
+    <td><button class="small" data-unblock="${esc(ip)}">Unblock</button></td>
+  </tr>`).join('') : '<tr><td colspan="2" class="empty">No blocked IPs.</td></tr>';
+  $('#blk-tbody').querySelectorAll('button[data-unblock]').forEach(b => {
+    b.onclick = async () => {
+      const r = await post('/unblock', { ip: b.dataset.unblock });
+      if (r) toast(r.msg, r.ok ? 'success' : 'error');
+    };
+  });
+  // Refresh DNS state alongside the blocked list (same tab).
+  if (typeof window.refreshDNSState === 'function') window.refreshDNSState();
+}
+
+async function refreshAlerts() {
+  const rows = await api('/alerts');
+  if (!rows) return;
+  $('#alert-tbody').innerHTML = rows.length ? rows.map(r => {
+    const color = r.level === 'error' ? 'var(--danger)' :
+                  r.level === 'warn'  ? 'var(--warning)' : 'var(--accent)';
+    return `<tr>
+      <td>${fmtDateTime(r.ts)}</td>
+      <td><span class="badge" style="color: ${color}; background: rgba(255,255,255,0.04);">${r.level}</span></td>
+      <td>${esc(r.msg)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="3" class="empty">No alerts.</td></tr>';
+}
+
+/* ============= Network Map (D3 force graph) ============= */
+const mapState = {
+  sim: null, svg: null, gLinks: null, gNodes: null,
+  nodes: [], links: [], byId: new Map(),
+  publicOnly: false, frozen: false, initialized: false,
+};
+
+function initMap() {
+  if (mapState.initialized) return;
+  mapState.initialized = true;
+  const svg = d3.select('#map-svg');
+  mapState.svg = svg;
+
+  const root = svg.append('g').attr('class', 'root');
+  mapState.gLinks = root.append('g').attr('class', 'links');
+  mapState.gNodes = root.append('g').attr('class', 'nodes');
+
+  // Zoom + pan
+  svg.call(d3.zoom()
+    .scaleExtent([0.2, 4])
+    .on('zoom', (event) => root.attr('transform', event.transform)));
+
+  const container = document.getElementById('map-container');
+  const W = container.clientWidth, H = container.clientHeight;
+  mapState.sim = d3.forceSimulation()
+    .force('link', d3.forceLink().id(d => d.id).distance(d => d.type === 'proc' ? 90 : 70).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(-180))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide().radius(d => d.r + 4))
+    .on('tick', () => {
+      mapState.gLinks.selectAll('line')
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      mapState.gNodes.selectAll('g.node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+  window.addEventListener('resize', () => {
+    if (state.tab !== 'map') return;
+    const c = document.getElementById('map-container');
+    mapState.sim.force('center', d3.forceCenter(c.clientWidth / 2, c.clientHeight / 2));
+    mapState.sim.alpha(0.3).restart();
+  });
+}
+
+function buildMapData(flows) {
+  // Two-tier graph: process node ↔ remote-host node.
+  // Group remote endpoints by domain when known, else by raw IP.
+  const nodes = new Map();
+  const edges = new Map();
+  for (const f of flows) {
+    if (mapState.publicOnly && f.private) continue;
+    const procId = `p:${f.process || 'pid'+f.pid}`;
+    const hostKey = f.domain || f.sni || f.http_host || f.raddr;
+    const hostId = `h:${hostKey}`;
+    const isLocal = f.private;
+    if (!nodes.has(procId)) {
+      nodes.set(procId, {
+        id: procId, kind: 'proc', label: f.process || `pid ${f.pid}`,
+        color: '#58a6ff', r: 9, bytes: 0,
+      });
+    }
+    if (!nodes.has(hostId)) {
+      let color = isLocal ? '#3fb950' : '#d29922';
+      if (f.blocked || (f.threat || 0) >= 2) color = '#f85149';
+      nodes.set(hostId, {
+        id: hostId, kind: 'host', label: hostKey,
+        country: f.country_code || '', asn: f.asn || '',
+        ip: f.raddr, blocked: !!f.blocked, threat: f.threat || 0,
+        color, r: 6, bytes: 0,
+      });
+    }
+    nodes.get(procId).bytes += f.sent + f.recv;
+    nodes.get(hostId).bytes += f.sent + f.recv;
+    const ek = `${procId}|${hostId}`;
+    if (!edges.has(ek)) {
+      edges.set(ek, { source: procId, target: hostId, bytes: 0 });
+    }
+    edges.get(ek).bytes += f.sent + f.recv;
+  }
+  // Size nodes by traffic (sqrt scale)
+  const maxBytes = Math.max(1, ...[...nodes.values()].map(n => n.bytes));
+  for (const n of nodes.values()) {
+    const base = n.kind === 'proc' ? 9 : 6;
+    n.r = base + Math.sqrt(n.bytes / maxBytes) * 12;
+  }
+  return { nodes: [...nodes.values()], links: [...edges.values()] };
+}
+
+function renderMap() {
+  if (state.tab !== 'map') return;
+  initMap();
+  const { nodes: newNodes, links: newLinks } = buildMapData(state.liveFlows);
+  $('#map-count').textContent = `${newNodes.length} nodes · ${newLinks.length} edges`;
+
+  // Merge with existing nodes to preserve simulation positions
+  const oldById = mapState.byId;
+  const merged = newNodes.map(n => {
+    const o = oldById.get(n.id);
+    if (o) { return Object.assign(o, n); }
+    return n;
+  });
+  mapState.byId = new Map(merged.map(n => [n.id, n]));
+  mapState.nodes = merged;
+  mapState.links = newLinks;
+
+  // Update links
+  const linkSel = mapState.gLinks.selectAll('line')
+    .data(newLinks, d => `${d.source.id || d.source}|${d.target.id || d.target}`);
+  linkSel.exit().remove();
+  linkSel.enter().append('line')
+    .attr('class', 'link')
+    .attr('stroke-width', 1)
+    .merge(linkSel)
+    .attr('stroke-width', d => Math.min(5, 0.5 + Math.log10(1 + d.bytes / 1024)));
+
+  // Update nodes
+  const nodeSel = mapState.gNodes.selectAll('g.node').data(merged, d => d.id);
+  nodeSel.exit().remove();
+  const nodeEnter = nodeSel.enter().append('g').attr('class', 'node')
+    .call(d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active) mapState.sim.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event, d) => {
+        if (!event.active) mapState.sim.alphaTarget(0);
+        if (!mapState.frozen) { d.fx = null; d.fy = null; }
+      }))
+    .on('mouseover', (event, d) => {
+      const tt = document.getElementById('map-tooltip');
+      const lines = [];
+      if (d.kind === 'proc') {
+        lines.push(`<b>${esc(d.label)}</b>`);
+        lines.push(`<span style="color:var(--text-dim)">process · ${fmtBytes(d.bytes)} traffic</span>`);
+      } else {
+        lines.push(`<b>${esc(d.label)}</b>`);
+        if (d.ip && d.label !== d.ip) lines.push(`<span style="color:var(--text-dim)">${esc(d.ip)}</span>`);
+        if (d.country) lines.push(`${flagEmoji(d.country)} ${esc(d.country)} · ${esc(d.asn || '')}`);
+        if (d.blocked) lines.push(`<span style="color:var(--danger)">BLOCKED</span>`);
+        if (d.threat >= 2) lines.push(`<span style="color:var(--danger)">⚠ flagged</span>`);
+        lines.push(`<span style="color:var(--text-dim)">${fmtBytes(d.bytes)} traffic</span>`);
+      }
+      tt.innerHTML = lines.join('<br>');
+      tt.style.display = 'block';
+      tt.style.left = (event.offsetX + 12) + 'px';
+      tt.style.top  = (event.offsetY + 12) + 'px';
+      // Highlight connected links
+      mapState.gLinks.selectAll('line').classed('active',
+        l => l.source.id === d.id || l.target.id === d.id);
+    })
+    .on('mousemove', (event) => {
+      const tt = document.getElementById('map-tooltip');
+      tt.style.left = (event.offsetX + 12) + 'px';
+      tt.style.top  = (event.offsetY + 12) + 'px';
+    })
+    .on('mouseout', () => {
+      document.getElementById('map-tooltip').style.display = 'none';
+      mapState.gLinks.selectAll('line').classed('active', false);
+    });
+  nodeEnter.append('circle');
+  nodeEnter.append('text')
+    .attr('dy', d => d.r + 12)
+    .attr('text-anchor', 'middle');
+
+  const allNodes = nodeEnter.merge(nodeSel);
+  allNodes.select('circle')
+    .attr('r', d => d.r)
+    .attr('fill', d => d.color);
+  allNodes.select('text')
+    .attr('class', d => d.kind === 'host' ? 'muted' : '')
+    .attr('dy', d => d.r + 12)
+    .text(d => {
+      const max = d.kind === 'proc' ? 18 : 24;
+      return d.label.length > max ? d.label.slice(0, max - 1) + '…' : d.label;
+    });
+
+  mapState.sim.nodes(merged);
+  mapState.sim.force('link').links(newLinks);
+  mapState.sim.alpha(0.5).restart();
+}
+
+async function refreshRules() {
+  const rules = await api('/rules');
+  if (!rules) return;
+  $('#rules-count').textContent = rules.length;
+  $('#rule-tbody').innerHTML = rules.length ? rules.map(r => {
+    const actionColor = r.action === 'block' ? 'var(--danger)' : 'var(--warning)';
+    return `<tr>
+      <td><input type="checkbox" data-toggle="${r.id}" ${r.enabled ? 'checked' : ''}></td>
+      <td>${esc(r.name)}</td>
+      <td><span class="badge">${r.match_type}</span></td>
+      <td><code>${esc(r.match_value)}</code></td>
+      <td><span class="badge" style="color: ${actionColor}; background: rgba(255,255,255,.04);">${r.action}</span></td>
+      <td class="num">${r.hit_count}</td>
+      <td><button class="small danger" data-del-rule="${r.id}">Delete</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">No rules yet. Add one above.</td></tr>';
+
+  $('#rule-tbody').querySelectorAll('input[data-toggle]').forEach(cb => {
+    cb.onchange = async () => {
+      await post('/rules/toggle', { id: Number(cb.dataset.toggle), enabled: cb.checked });
+    };
+  });
+  $('#rule-tbody').querySelectorAll('button[data-del-rule]').forEach(b => {
+    b.onclick = async () => {
+      if (!confirm('Delete this rule?')) return;
+      const r = await post('/rules/delete', { id: Number(b.dataset.delRule) });
+      if (r?.ok) { toast('Rule deleted', 'success'); refreshRules(); }
+    };
+  });
+}
+
+async function runHistory() {
+  const secs = $('#hist-range').value;
+  const q = $('#hist-q').value;
+  $('#hist-tbody').innerHTML = '<tr><td colspan="10" class="empty">Loading…</td></tr>';
+  const rows = await api(`/history?seconds=${secs}&q=${encodeURIComponent(q)}`);
+  if (!rows) return;
+  $('#hist-tbody').innerHTML = rows.length ? rows.map(r => `<tr>
+    <td>${fmtDateTime(r.ts)}</td>
+    <td><span class="badge ${r.proto.toLowerCase()}">${r.proto}</span></td>
+    <td>${esc(r.src)}</td><td class="num">${r.sport}</td>
+    <td>${esc(r.dst)}</td><td class="num">${r.dport}</td>
+    <td class="num">${r.length}</td>
+    <td class="num">${r.pid}</td>
+    <td>${esc(r.process || '')}</td>
+    <td>${esc(r.domain || '')}</td>
+  </tr>`).join('') : '<tr><td colspan="10" class="empty">No packets in this range.</td></tr>';
+}
+
+function exportHistoryCSV() {
+  const trs = $('#hist-tbody').querySelectorAll('tr');
+  if (!trs.length) return;
+  const cols = ['Time','Proto','Src','Sport','Dst','Dport','Len','PID','Process','Domain'];
+  const rows = [cols.join(',')];
+  trs.forEach(tr => {
+    const cells = Array.from(tr.querySelectorAll('td')).map(td =>
+      `"${td.innerText.replace(/"/g,'""')}"`);
+    if (cells.length === cols.length) rows.push(cells.join(','));
+  });
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `netmon-history-${Date.now()}.csv`;
+  a.click();
+}
+
+function refreshCurrentTab() {
+  const t = state.tab;
+  if (t === 'live') renderLive();
+  else if (t === 'map') renderMap();
+  else if (t === 'dashboard') renderTopLists();
+  else if (t === 'processes') refreshProcesses();
+  else if (t === 'domains') refreshDomains();
+  else if (t === 'blocked') refreshBlocked();
+  else if (t === 'rules') refreshRules();
+  else if (t === 'alerts') refreshAlerts();
+  else if (t === 'logs') refreshLogs();
+  else if (t === 'settings') refreshSettings();
+}
+
+async function refreshLogs() {
+  const limit = $('#log-limit').value;
+  const r = await api(`/debug?limit=${limit}`);
+  if (!r) return;
+  $('#log-debug').checked = !!r.enabled;
+  const q = $('#log-q').value.toLowerCase().trim();
+  const lvl = $('#log-level').value.toLowerCase();
+  let lines = r.lines || [];
+  if (q) lines = lines.filter(l => l.toLowerCase().includes(q));
+  if (lvl) lines = lines.filter(l => l.toLowerCase().includes(lvl));
+  $('#log-count').textContent = `${lines.length} / ${r.lines.length}`;
+  // Colorize
+  const v = $('#log-viewer');
+  v.innerHTML = lines.map(l => {
+    const safe = esc(l);
+    let cls = '';
+    if (/error|fatal|fail/i.test(l)) cls = 'color:var(--danger);';
+    else if (/warn|drop/i.test(l)) cls = 'color:var(--warning);';
+    else if (/\[debug\]/i.test(l)) cls = 'color:var(--text-faint);';
+    return `<div style="${cls}">${safe}</div>`;
+  }).join('');
+  v.scrollTop = v.scrollHeight;
+}
+
+async function refreshSettings() {
+  const s = await api('/settings');
+  if (!s) return;
+  $('#set-log-packets').checked = !!s.log_packets;
+  $('#set-geo').checked = !!s.geo_enabled;
+  if (document.activeElement !== $('#set-ret-packets'))
+    $('#set-ret-packets').value = s.retention_packet_days ?? 7;
+  if (document.activeElement !== $('#set-ret-archive'))
+    $('#set-ret-archive').value = s.retention_archive_days ?? 30;
+  const st = state.status || {};
+  $('#set-db-writes').textContent = (st.db_writes ?? 0).toLocaleString();
+  $('#set-db-dropped').textContent = (st.db_dropped ?? 0).toLocaleString();
+  $('#set-flows-persisted').textContent = (st.flows_persisted ?? 0).toLocaleString();
+}
+
+/* ---- Dashboard customize + clickable cards ---- */
+const ALL_CARDS = ['sent','recv','flows','procs','doms','blocked','rules','alerts'];
+const CARD_LABELS = {
+  sent: 'Uploaded', recv: 'Downloaded', flows: 'Active flows',
+  procs: 'Processes', doms: 'Domains', blocked: 'Blocked IPs',
+  rules: 'Rules', alerts: 'Alerts',
+};
+function applyCardVisibility() {
+  document.querySelectorAll('#dash-cards .clickable-card').forEach(el => {
+    const k = el.dataset.card;
+    el.style.display = state.hiddenCards.has(k) ? 'none' : '';
+  });
+  document.querySelectorAll('[data-widget]').forEach(el => {
+    el.style.display = state.hiddenWidgets.has(el.dataset.widget) ? 'none' : '';
+  });
+}
+const ALL_WIDGETS = ['top-procs','top-doms','top-countries','top-ports','top-hosts','threats','suspicious','storage'];
+const WIDGET_LABELS = {
+  'top-procs': 'Top processes', 'top-doms': 'Top domains',
+  'top-countries': 'Top countries', 'top-ports': 'Top ports',
+  'top-hosts': 'Top hosts', 'threats': 'Threat summary',
+  'suspicious': 'Suspicious processes', 'storage': 'Storage explainer',
+};
+const SUSPICIOUS_PORTS = new Set([22,23,21,25,80,135,137,138,139,389,445,1080,1433,1521,3306,3389,4444,5432,5900,5985,5986,6667,9001,9050,14444]);
+const HIGH_RISK_COUNTRIES = new Set(['CN','RU','KP','IR','BY','SY']);
+function renderCustomList() {
+  const list = $('#dash-custom-list');
+  if (!list) return;
+  list.innerHTML = ALL_CARDS.map(k => `<label class="check">
+    <input type="checkbox" data-card-toggle="${k}" ${state.hiddenCards.has(k)?'':'checked'}>
+    ${esc(CARD_LABELS[k])}</label>`).join('');
+  list.querySelectorAll('input[data-card-toggle]').forEach(cb => {
+    cb.onchange = () => {
+      const k = cb.dataset.cardToggle;
+      if (cb.checked) state.hiddenCards.delete(k);
+      else state.hiddenCards.add(k);
+      applyCardVisibility();
+      savePrefs();
+    };
+  });
+  const wlist = $('#widget-custom-list');
+  if (wlist) {
+    wlist.innerHTML = ALL_WIDGETS.map(k => `<label class="check">
+      <input type="checkbox" data-widget-toggle="${k}" ${state.hiddenWidgets.has(k)?'':'checked'}>
+      ${esc(WIDGET_LABELS[k])}</label>`).join('');
+    wlist.querySelectorAll('input[data-widget-toggle]').forEach(cb => {
+      cb.onchange = () => {
+        const k = cb.dataset.widgetToggle;
+        if (cb.checked) state.hiddenWidgets.delete(k);
+        else state.hiddenWidgets.add(k);
+        applyCardVisibility();
+        savePrefs();
+      };
+    });
+  }
+}
+
+async function exportAISnapshot() {
+  toast('Building snapshot…', 'info');
+  const [status, procs, doms, alerts, rules, blocked] = await Promise.all([
+    api('/status'),
+    api('/processes?limit=200'),
+    api('/domains?limit=200'),
+    api('/alerts'),
+    api('/rules'),
+    api('/blocked'),
+  ]);
+  const flows = state.liveFlows || [];
+  // Aggregates
+  const cm = new Map(), pm = new Map(), hm = new Map();
+  for (const f of flows) {
+    const cc = f.country_code || (f.private ? 'LAN' : '—');
+    cm.set(cc, (cm.get(cc) || 0) + 1);
+    pm.set(f.rport, (pm.get(f.rport) || 0) + 1);
+    const host = hostOf(f) || f.raddr;
+    hm.set(host, (hm.get(host) || 0) + f.sent + f.recv);
+  }
+  const sortDesc = (m, n=20) => [...m.entries()].sort((a,b) => b[1] - a[1]).slice(0, n);
+
+  // Suspicious procs (mirror dashboard scoring)
+  const proSusp = new Map();
+  for (const f of flows) {
+    const key = f.process || `pid ${f.pid}`;
+    const p = proSusp.get(key) || { name: key, score: 0, reasons: new Set() };
+    if ((f.threat || 0) >= 2) { p.score += 3; p.reasons.add('flagged-IP'); }
+    if (f.blocked) { p.score += 2; p.reasons.add('blocked'); }
+    if (SUSPICIOUS_PORTS.has(f.rport)) { p.score += 2; p.reasons.add(`port:${f.rport}`); }
+    if (HIGH_RISK_COUNTRIES.has(f.country_code)) { p.score += 2; p.reasons.add(`cc:${f.country_code}`); }
+    if (/^(powershell|cmd\.exe|rundll32|regsvr32|mshta|certutil|bitsadmin)/i.test(f.process || '')) {
+      p.score += 4; p.reasons.add('LOLBin');
+    }
+    proSusp.set(key, p);
+  }
+  const suspicious = [...proSusp.values()].filter(p => p.score > 0)
+    .sort((a,b) => b.score - a.score).slice(0, 20)
+    .map(p => ({ name: p.name, score: p.score, reasons: [...p.reasons] }));
+
+  const snapshot = {
+    schema: 'netmon-ai-snapshot/v1',
+    captured_at: new Date().toISOString(),
+    host: location.host,
+    status: status || {},
+    counts: {
+      flows: flows.length, processes: procs?.length || 0,
+      domains: doms?.length || 0, alerts: alerts?.length || 0,
+      rules: rules?.length || 0, blocked: blocked?.ips?.length || 0,
+    },
+    flows: flows.slice(0, 250),    // cap for context size
+    processes: (procs || []).slice(0, 100),
+    domains: (doms || []).slice(0, 100),
+    alerts: (alerts || []).slice(0, 200),
+    rules: rules || [],
+    blocked_ips: blocked?.ips || [],
+    aggregates: {
+      top_countries: sortDesc(cm),
+      top_remote_ports: sortDesc(pm).map(([p, n]) => ({ port: p, name: PORT_NAMES[p] || '', flows: n })),
+      top_remote_hosts_by_bytes: sortDesc(hm).map(([host, b]) => ({ host, bytes: b })),
+    },
+    suspicious_processes: suspicious,
+    prompt_hint: 'You are a SOC analyst. Review this NetMon snapshot. Identify the highest-risk processes and remote endpoints. Note any beaconing patterns, possible data exfiltration, LOLBin egress, suspicious ports/countries/ASNs. Recommend specific block rules or hunt queries.',
+  };
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `netmon-snapshot-${Date.now()}.json`;
+  a.click();
+  toast(`Snapshot exported (${flows.length} flows, ${alerts?.length || 0} alerts)`, 'success');
+}
+
+function showShortcuts() {
+  const html = `
+<div style="line-height:1.8;">
+<b>Keyboard shortcuts</b><br>
+<code>1-9</code> — switch tab (Dashboard, Live, Map, …)<br>
+<code>/</code> — focus the search box<br>
+<code>p</code> — pause / resume capture<br>
+<code>u</code> — toggle Pause UI on Live tab<br>
+<code>g</code> — cycle Group-by (off → process → domain → country)<br>
+<code>r</code> — reset all filter chips<br>
+<code>?</code> — show this help<br>
+<code>esc</code> — clear search box<br>
+</div>`;
+  const o = document.createElement('div');
+  o.style = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  o.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;max-width:500px;color:var(--text);font-size:13px;">${html}<div style="margin-top:14px;text-align:right;"><button class="primary small" id="sc-close">Close</button></div></div>`;
+  document.body.appendChild(o);
+  o.querySelector('#sc-close').onclick = () => o.remove();
+  o.onclick = (e) => { if (e.target === o) o.remove(); };
+}
+
+/* ---- Preset alert templates ---- */
+const ALERT_PRESETS = [
+  // Remote access protocols outbound — flag lateral movement / data exfil
+  { name: 'SSH outbound (port 22)',     match_type: 'port', match_value: '22',   action: 'alert',
+    why: 'Outbound SSH from non-admin hosts may indicate reverse shells or backup tunnels.' },
+  { name: 'Telnet outbound (port 23)',  match_type: 'port', match_value: '23',   action: 'alert',
+    why: 'Cleartext legacy protocol — almost always malicious in 2026.' },
+  { name: 'RDP outbound (port 3389)',   match_type: 'port', match_value: '3389', action: 'alert',
+    why: 'Workstations rarely RDP outbound; flag lateral-movement attempts.' },
+  { name: 'SMB outbound (port 445)',    match_type: 'port', match_value: '445',  action: 'alert',
+    why: 'SMB to the public internet leaks credentials and is the classic worm vector.' },
+  { name: 'FTP outbound (port 21)',     match_type: 'port', match_value: '21',   action: 'alert',
+    why: 'Cleartext file transfer — common exfiltration channel.' },
+  { name: 'Cleartext HTTP (port 80)',   match_type: 'port', match_value: '80',   action: 'alert',
+    why: 'Most legit web is 443 — port 80 to unknown hosts can hide stagers.' },
+  { name: 'IRC outbound (port 6667)',   match_type: 'port', match_value: '6667', action: 'alert',
+    why: 'Classic C2 channel.' },
+  { name: 'Tor relay port (9001)',      match_type: 'port', match_value: '9001', action: 'alert',
+    why: 'Tor entry-node traffic.' },
+  // Country alerts — high cyber-crime origin per CISA + industry
+  { name: 'Connection to CN',           match_type: 'country', match_value: 'CN', action: 'alert',
+    why: 'Inbound/outbound to China.' },
+  { name: 'Connection to RU',           match_type: 'country', match_value: 'RU', action: 'alert',
+    why: 'Inbound/outbound to Russia.' },
+  { name: 'Connection to KP',           match_type: 'country', match_value: 'KP', action: 'alert',
+    why: 'Inbound/outbound to North Korea.' },
+  { name: 'Connection to IR',           match_type: 'country', match_value: 'IR', action: 'alert',
+    why: 'Inbound/outbound to Iran.' },
+  // Process-based — admin shells should not normally egress
+  { name: 'PowerShell on the wire',     match_type: 'process', match_value: 'powershell', action: 'alert',
+    why: 'Living-off-the-land binary; egress is a strong IOC.' },
+  { name: 'cmd.exe on the wire',        match_type: 'process', match_value: 'cmd.exe', action: 'alert',
+    why: 'cmd.exe rarely opens sockets directly — investigate.' },
+  { name: 'rundll32 on the wire',       match_type: 'process', match_value: 'rundll32', action: 'alert',
+    why: 'Common LOLBin for proxied execution.' },
+  { name: 'regsvr32 on the wire',       match_type: 'process', match_value: 'regsvr32', action: 'alert',
+    why: 'Squiblydoo / MSHTA-class TTP, often used by initial-access malware.' },
+  { name: 'mshta on the wire',          match_type: 'process', match_value: 'mshta',    action: 'alert',
+    why: 'HTA executor — phishing payload runner.' },
+  { name: 'certutil on the wire',       match_type: 'process', match_value: 'certutil', action: 'alert',
+    why: 'Frequently abused for stager download (certutil -urlcache).' },
+  { name: 'bitsadmin on the wire',      match_type: 'process', match_value: 'bitsadmin',action: 'alert',
+    why: 'BITS jobs used to stealthily download payloads.' },
+  // DNS tunneling / mining / messenger exfil / RDP-over-web / Teamviewer-like
+  { name: 'DoH (DNS-over-HTTPS) port 5353', match_type: 'port', match_value: '5353', action: 'alert',
+    why: 'mDNS/Bonjour leaving local LAN is unusual.' },
+  { name: 'MySQL outbound (port 3306)', match_type: 'port', match_value: '3306', action: 'alert',
+    why: 'Direct DB egress — exfiltration channel.' },
+  { name: 'PostgreSQL outbound (5432)', match_type: 'port', match_value: '5432', action: 'alert',
+    why: 'Direct DB egress — exfiltration channel.' },
+  { name: 'MSSQL outbound (1433)',      match_type: 'port', match_value: '1433', action: 'alert',
+    why: 'Direct DB egress.' },
+  { name: 'WinRM outbound (5985)',      match_type: 'port', match_value: '5985', action: 'alert',
+    why: 'Remote PowerShell over HTTP — lateral movement.' },
+  { name: 'WinRM-S outbound (5986)',    match_type: 'port', match_value: '5986', action: 'alert',
+    why: 'Remote PowerShell over HTTPS — lateral movement.' },
+  { name: 'Crypto-mining pool (3333)',  match_type: 'port', match_value: '3333', action: 'alert',
+    why: 'Common stratum mining-pool port.' },
+  { name: 'Crypto-mining pool (4444)',  match_type: 'port', match_value: '4444', action: 'alert',
+    why: 'Stratum mining / Metasploit handler.' },
+  { name: 'Crypto-mining pool (14444)', match_type: 'port', match_value: '14444', action: 'alert',
+    why: 'XMRig / Monero pool.' },
+  { name: 'NetBIOS outbound (137-139)', match_type: 'port', match_value: '137', action: 'alert',
+    why: 'NetBIOS to internet leaks computer/user names.' },
+  { name: 'LDAP outbound (389)',        match_type: 'port', match_value: '389', action: 'alert',
+    why: 'Cleartext directory protocol.' },
+  { name: 'LDAPS outbound (636)',       match_type: 'port', match_value: '636', action: 'alert',
+    why: 'External AD lookups — possibly recon.' },
+  { name: 'Kerberos outbound (88)',     match_type: 'port', match_value: '88',  action: 'alert',
+    why: 'Kerberos egress to public IP = no legit reason.' },
+  { name: 'SOCKS proxy (1080)',         match_type: 'port', match_value: '1080', action: 'alert',
+    why: 'Generic SOCKS proxy — often used to tunnel C2.' },
+  { name: 'VNC outbound (5900)',        match_type: 'port', match_value: '5900', action: 'alert',
+    why: 'Remote control — cleartext historically.' },
+  // Country additions
+  { name: 'Connection to BY (Belarus)', match_type: 'country', match_value: 'BY', action: 'alert',
+    why: 'Sanctioned region with active threat groups.' },
+  { name: 'Connection to SY (Syria)',   match_type: 'country', match_value: 'SY', action: 'alert',
+    why: 'Sanctioned.' },
+  // Common C2/anon ASNs (examples — adjust to your environment)
+  { name: 'Outbound to AS-CHOOPA (Vultr)', match_type: 'asn', match_value: 'AS20473', action: 'alert',
+    why: 'Cheap VPS — frequently rented by C2 operators.' },
+  { name: 'Outbound to DigitalOcean',   match_type: 'asn', match_value: 'AS14061', action: 'alert',
+    why: 'Common short-lease C2 hosting.' },
+  { name: 'Outbound to Hetzner',        match_type: 'asn', match_value: 'AS24940', action: 'alert',
+    why: 'Cheap EU VPS — frequent abuse target.' },
+];
+
+async function renderPresetAlerts() {
+  const box = $('#preset-alerts');
+  if (!box) return;
+  // Load current rules so we can flag presets that already exist.
+  const rules = (await api('/rules')) || [];
+  const has = (p) => rules.some(r =>
+    r.match_type === p.match_type &&
+    r.match_value === p.match_value &&
+    r.action === p.action);
+
+  box.innerHTML = ALERT_PRESETS.map((p, i) => {
+    const installed = has(p);
+    return `<div class="card" style="padding:10px 12px;min-width:240px;flex:0 0 240px;${installed?'opacity:.7;':''}">
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px;">${esc(p.name)}${installed?' <span class="badge" style="background:rgba(63,185,80,.15);color:#3fb950;">installed</span>':''}</div>
+      <div style="font-size:11px;color:var(--text-faint);min-height:36px;line-height:1.4;">${esc(p.why)}</div>
+      <button class="${installed?'ghost':'primary'} small" data-preset-alert="${i}" ${installed?'disabled':''} style="margin-top:8px;">${installed?'✓ Installed':'+ Add as alert rule'}</button>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('button[data-preset-alert]:not([disabled])').forEach(b => {
+    b.onclick = async () => {
+      const p = ALERT_PRESETS[Number(b.dataset.presetAlert)];
+      const r = await post('/rules/add', {
+        name: p.name, match_type: p.match_type,
+        match_value: p.match_value, action: p.action,
+      });
+      if (r?.ok) {
+        toast(`Added: ${p.name}`, 'success');
+        renderPresetAlerts();  // re-render to reflect new state
+      } else {
+        toast(r?.msg || 'Failed', 'error');
+      }
+    };
+  });
+}
+
+/* ---- Toast/sound on new alert ---- */
+let lastAlertTs = 0;
+async function pollAlertsNotify() {
+  if (!state.alertToast && !state.alertSound) return;
+  const rows = await api('/alerts');
+  if (!rows || !rows.length) return;
+  if (state.tab === 'alerts') { lastAlertTs = rows[0].ts; return; }
+  const fresh = rows.filter(r => r.ts > lastAlertTs);
+  if (fresh.length) {
+    if (state.alertToast) {
+      for (const r of fresh.slice(0, 3)) {
+        toast(`[${r.level}] ${r.msg}`, r.level === 'error' ? 'error' : (r.level === 'warn' ? 'warn' : 'info'));
+      }
+    }
+    if (state.alertSound && fresh.some(r => r.level === 'error' || r.level === 'warn')) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.frequency.value = 880; g.gain.value = 0.06;
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); setTimeout(() => { o.stop(); ctx.close(); }, 180);
+      } catch {}
+    }
+    lastAlertTs = rows[0].ts;
+    // Update alerts card count
+    const ca = $('#c-alerts'); if (ca) ca.textContent = rows.length;
+  } else if (rows.length) {
+    const ca = $('#c-alerts'); if (ca) ca.textContent = rows.length;
+  }
+}
+
+/* Init */
+async function init() {
+  loadPrefs();
+  applyTheme();
+  renderChips();
+  const ifs = await api('/interfaces');
+  const sel = $('#iface');
+  (ifs?.interfaces || ['(all)']).forEach(i => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = i;
+    sel.appendChild(o);
+  });
+
+  $('#btn-start').onclick = async () => {
+    const r = await post('/capture/start', { iface: sel.value });
+    if (r) toast(r.ok ? `Started${r.iface ? ' on ' + r.iface : ''}` : r.msg, r.ok ? 'success' : 'error');
+  };
+  $('#btn-stop').onclick = async () => { await post('/capture/stop'); toast('Stopped'); };
+  $('#btn-pause').onclick = async () => {
+    const r = await post('/capture/pause');
+    if (r) toast(r.paused ? 'Paused' : 'Resumed');
+  };
+  $('#btn-clear').onclick = async () => {
+    if (!confirm('Clear all in-memory stats? (DB log is kept.)')) return;
+    await post('/clear'); toast('Stats cleared');
+  };
+  $('#btn-pcap').onclick = async () => {
+    if (state.status.pcap_recording) {
+      await post('/pcap/stop'); toast('PCAP stopped');
+    } else {
+      const r = await post('/pcap/start', {});
+      if (r) toast(r.ok ? `Recording → ${r.path}` : r.msg, r.ok ? 'success' : 'error');
+    }
+  };
+
+  let filterTimer;
+  $('#filter').oninput = (e) => {
+    state.filter = e.target.value;
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(refreshCurrentTab, 150);
+  };
+
+  $('#block-ip-btn').onclick = async () => {
+    const ip = $('#block-ip-input').value.trim();
+    if (!ip) return;
+    const r = await post('/block', { ip });
+    if (r) { toast(r.msg, r.ok ? 'success' : 'error'); $('#block-ip-input').value = ''; refreshBlocked(); }
+  };
+  $('#block-dom-btn').onclick = async () => {
+    const domain = $('#block-dom-input').value.trim();
+    if (!domain) return;
+    const r = await post('/block', { domain });
+    if (r) { toast(r.msg, r.ok ? 'success' : 'error'); $('#block-dom-input').value = ''; refreshBlocked(); }
+  };
+
+  /* ---------------- Custom DNS controls ---------------- */
+  window.refreshDNSState = async function() {
+    const r = await api('/dns/state');
+    if (!r) return;
+    const sel = $('#dns-iface');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (!r.ok || !r.interfaces || r.interfaces.length === 0) {
+      $('#dns-state').textContent = r.msg || 'No interfaces reported.';
+      sel.innerHTML = '<option value="">(no interfaces)</option>';
+      return;
+    }
+    r.interfaces.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value = i.name;
+      opt.textContent = i.name + (i.source ? ` [${i.source}]` : '');
+      sel.appendChild(opt);
+    });
+    if (prev && r.interfaces.some(i => i.name === prev)) sel.value = prev;
+    const lines = r.interfaces.map(i =>
+      `${i.name}  (${i.source || '?'})\n  ${(i.servers || []).join(', ') || '— none —'}`
+    ).join('\n\n');
+    $('#dns-state').textContent = lines;
+  };
+  $('#dns-refresh').onclick = window.refreshDNSState;
+  $('#dns-preset').onchange = (e) => {
+    const v = e.target.value;
+    if (!v || v === 'custom') {
+      if (v === 'custom') { $('#dns-primary').value = ''; $('#dns-secondary').value = ''; $('#dns-primary').focus(); }
+      return;
+    }
+    const [p, s] = v.split('|');
+    $('#dns-primary').value = p || '';
+    $('#dns-secondary').value = s || '';
+  };
+  $('#dns-apply').onclick = async () => {
+    const iface = $('#dns-iface').value;
+    const primary = $('#dns-primary').value.trim();
+    const secondary = $('#dns-secondary').value.trim();
+    if (!iface) { toast('pick an interface', 'error'); return; }
+    if (!primary) { toast('primary DNS required', 'error'); return; }
+    if (!confirm(`Set DNS for "${iface}" to ${primary}${secondary ? ' / '+secondary : ''}?\nReversible via "Reset to DHCP".`)) return;
+    const r = await post('/dns/set', { iface, primary, secondary });
+    if (r) { toast(r.msg, r.ok ? 'success' : 'error'); window.refreshDNSState(); }
+  };
+  $('#dns-reset-dhcp').onclick = async () => {
+    const iface = $('#dns-iface').value;
+    if (!iface) { toast('pick an interface', 'error'); return; }
+    if (!confirm(`Reset DNS on "${iface}" to DHCP?`)) return;
+    const r = await post('/dns/reset', { iface });
+    if (r) { toast(r.msg, r.ok ? 'success' : 'error'); window.refreshDNSState(); }
+  };
+
+  /* ---------------- Ad-block list import ---------------- */
+  document.querySelectorAll('.dns-preset-list').forEach(btn => {
+    btn.onclick = async () => {
+      const url = btn.dataset.url;
+      if (!confirm(`Fetch + block all domains from:\n${url}\n\nCapped at 10,000 entries. Resolution runs in the background.`)) return;
+      btn.disabled = true;
+      const r = await post('/block/import', { url });
+      btn.disabled = false;
+      if (r) {
+        if (r.ok) toast(`Queued ${r.queued} domains (${r.parsed} parsed)`, 'success');
+        else toast(r.msg || 'import failed', 'error');
+        refreshBlocked();
+      }
+    };
+  });
+  $('#adblock-url-btn').onclick = async () => {
+    const url = $('#adblock-url').value.trim();
+    if (!url) { toast('enter a URL', 'error'); return; }
+    if (!confirm(`Fetch + block all domains from:\n${url}\n\nCapped at 10,000 entries.`)) return;
+    const r = await post('/block/import', { url });
+    if (r) {
+      if (r.ok) toast(`Queued ${r.queued} domains (${r.parsed} parsed)`, 'success');
+      else toast(r.msg || 'import failed', 'error');
+      refreshBlocked();
+    }
+  };
+  $('#adblock-paste-btn').onclick = async () => {
+    const text = $('#adblock-paste').value.trim();
+    if (!text) { toast('paste at least one domain', 'error'); return; }
+    const r = await post('/block/bulk', { text });
+    if (r) {
+      if (r.ok) { toast(`Queued ${r.queued} domains`, 'success'); $('#adblock-paste').value = ''; }
+      else toast(r.msg || 'bulk block failed', 'error');
+      refreshBlocked();
+    }
+  };
+  // Live progress bar from status payload
+  setInterval(() => {
+    const s = state.status;
+    if (!s) return;
+    const total = s.bulk_block_total || 0;
+    const done = s.bulk_block_done || 0;
+    const msg = s.bulk_block_msg || '';
+    const el = $('#adblock-progress');
+    if (!el) return;
+    if (total > 0 && done < total) {
+      const pct = ((done / total) * 100).toFixed(1);
+      el.textContent = `Blocking… ${done} / ${total}  (${pct}%)`;
+    } else if (msg && msg !== 'idle' && total > 0) {
+      el.textContent = msg;
+    } else {
+      el.textContent = '';
+    }
+  }, 1000);
+  // DNS state refreshes on Blocked-tab entry via refreshBlocked() hook.
+
+  $('#hist-go').onclick = runHistory;
+  $('#hist-q').onkeydown = (e) => { if (e.key === 'Enter') runHistory(); };
+  $('#hist-export').onclick = exportHistoryCSV;
+
+  // BPF filter
+  $('#bpf-apply').onclick = async () => {
+    const r = await post('/capture/bpf', { filter: $('#bpf').value });
+    if (r) toast(r.note || 'BPF filter set', r.ok ? 'success' : 'error');
+  };
+  // Sync BPF input from status payload
+  const syncBPF = () => {
+    if (state.status.bpf_filter !== undefined && document.activeElement !== $('#bpf')) {
+      $('#bpf').value = state.status.bpf_filter || '';
+    }
+  };
+  setInterval(syncBPF, 2000);
+
+  // Network Map controls
+  $('#map-public-only').onchange = (e) => {
+    mapState.publicOnly = e.target.checked;
+    renderMap();
+  };
+  $('#map-freeze').onclick = () => {
+    mapState.frozen = !mapState.frozen;
+    if (mapState.frozen) {
+      mapState.nodes.forEach(n => { n.fx = n.x; n.fy = n.y; });
+      $('#map-freeze').textContent = 'Unfreeze';
+    } else {
+      mapState.nodes.forEach(n => { n.fx = null; n.fy = null; });
+      $('#map-freeze').textContent = 'Freeze layout';
+      mapState.sim?.alpha(0.5).restart();
+    }
+  };
+  $('#map-reset').onclick = () => {
+    mapState.byId.clear();
+    mapState.nodes = []; mapState.links = [];
+    mapState.gLinks?.selectAll('*').remove();
+    mapState.gNodes?.selectAll('*').remove();
+    renderMap();
+  };
+
+  // Rules
+  $('#rule-add').onclick = async () => {
+    const body = {
+      name: $('#rule-name').value.trim(),
+      match_type: $('#rule-type').value,
+      match_value: $('#rule-value').value.trim(),
+      action: $('#rule-action').value,
+    };
+    if (!body.match_value) { toast('Match value required', 'error'); return; }
+    const r = await post('/rules/add', body);
+    if (r?.ok) {
+      toast('Rule added', 'success');
+      $('#rule-name').value = ''; $('#rule-value').value = '';
+      refreshRules();
+    } else {
+      toast(r?.msg || 'Failed', 'error');
+    }
+  };
+
+  // Live filter dropdowns
+  const wireSel = (id, key, cast) => {
+    const el = $(id);
+    if (!el) return;
+    el.value = state[key] ?? '';
+    el.onchange = () => { state[key] = cast ? cast(el.value) : el.value; savePrefs(); renderLive(); };
+  };
+  wireSel('#f-proto', 'fProto');
+  wireSel('#f-dir',   'fDir');
+  wireSel('#f-scope', 'fScope');
+  wireSel('#f-minrate', 'fMinRate', Number);
+  wireSel('#f-group', 'fGroup');
+
+  // Pause UI
+  const pauseEl = $('#f-pause');
+  pauseEl.checked = !!state.uiPaused;
+  pauseEl.onchange = () => {
+    state.uiPaused = pauseEl.checked;
+    savePrefs();
+    if (!state.uiPaused && state.tab === 'live') renderLive();
+  };
+
+  $('#f-clear').onclick = () => {
+    state.chips = [];
+    state.fProto = state.fDir = state.fScope = state.fGroup = '';
+    state.fMinRate = 0; state.filter = '';
+    ['#f-proto','#f-dir','#f-scope','#f-group'].forEach(s => $(s).value = '');
+    $('#f-minrate').value = '0';
+    $('#filter').value = '';
+    renderChips(); savePrefs(); renderLive();
+  };
+
+  // Presets
+  $$('[data-preset]').forEach(btn => btn.onclick = () => applyPreset(btn.dataset.preset));
+
+  // Export visible Live rows as CSV
+  $('#f-export').onclick = () => {
+    const flows = sortLive(applyLiveFilters(state.liveFlows));
+    const cols = ['proto','laddr','lport','raddr','rport','country_code','host','pid','process','rate_sent','rate_recv','sent','recv','last'];
+    const lines = [cols.join(',')];
+    for (const c of flows) {
+      const row = cols.map(k => {
+        let v = k === 'host' ? hostOf(c) : c[k];
+        if (k === 'last') v = new Date(c.last).toISOString();
+        return `"${String(v ?? '').replace(/"/g,'""')}"`;
+      });
+      lines.push(row.join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `netmon-live-${Date.now()}.csv`;
+    a.click();
+  };
+
+  // Processes filter
+  $('#pf-activity').value = state.pfActivity || '';
+  $('#pf-min').value = String(state.pfMin || 0);
+  $('#pf-activity').onchange = (e) => { state.pfActivity = e.target.value; savePrefs(); refreshProcesses(); };
+  $('#pf-min').onchange      = (e) => { state.pfMin = Number(e.target.value); savePrefs(); refreshProcesses(); };
+
+  // Sortable headers (Live)
+  $$('#tab-live th[data-sort]').forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.sort;
+      if (state.sortBy === k) state.sortAsc = !state.sortAsc;
+      else { state.sortBy = k; state.sortAsc = false; }
+      renderLive();
+    };
+  });
+
+  // Clickable dashboard cards
+  applyCardVisibility();
+  renderCustomList();
+  document.querySelectorAll('#dash-cards .clickable-card').forEach(el => {
+    el.onclick = () => {
+      const jump = el.dataset.jump;
+      const dir  = el.dataset.presetDir;
+      if (dir) { state.fDir = dir; const sel = $('#f-dir'); if (sel) sel.value = dir; savePrefs(); }
+      switchTab(jump);
+    };
+  });
+  $('#dash-customize').onclick = () => {
+    const p = $('#dash-custom');
+    p.style.display = p.style.display === 'none' ? '' : 'none';
+  };
+
+  $('#dash-export-ai').onclick = exportAISnapshot;
+
+  // Logs tab wiring
+  let logTimer;
+  const wireLogRefresh = () => {
+    clearTimeout(logTimer);
+    if (state.tab === 'logs' && $('#log-auto').checked) {
+      logTimer = setTimeout(() => { refreshLogs(); wireLogRefresh(); }, 2000);
+    }
+  };
+  $('#log-q').oninput     = () => refreshLogs();
+  $('#log-level').onchange = () => refreshLogs();
+  $('#log-limit').onchange = () => refreshLogs();
+  $('#log-refresh').onclick = refreshLogs;
+  $('#log-auto').onchange = wireLogRefresh;
+  $('#log-debug').onchange = async (e) => {
+    await post('/debug', { enabled: e.target.checked });
+    toast(`Debug logging ${e.target.checked ? 'on' : 'off'}`, 'success');
+  };
+  $('#log-export').onclick = () => {
+    const txt = $('#log-viewer').innerText;
+    const blob = new Blob([txt], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `netmon-log-${Date.now()}.txt`;
+    a.click();
+  };
+  // Settings tab wiring
+  $('#set-log-packets').onchange = async (e) => {
+    await post('/settings', { log_packets: e.target.checked });
+    toast(`Packet logging ${e.target.checked ? 'on' : 'off'}`, 'success');
+  };
+  $('#set-geo').onchange = async (e) => {
+    await post('/settings', { geo_enabled: e.target.checked });
+    toast(`GeoIP ${e.target.checked ? 'on' : 'off'}`, 'success');
+  };
+  $('#set-ret-apply').onclick = async () => {
+    const pkt = Math.max(0, parseInt($('#set-ret-packets').value, 10) || 0);
+    const arc = Math.max(0, parseInt($('#set-ret-archive').value, 10) || 0);
+    const r = await post('/settings', {
+      retention_packet_days: pkt, retention_archive_days: arc,
+    });
+    if (r) toast(`Retention saved: packets ${pkt}d, archive ${arc}d`, 'success');
+  };
+  $('#set-prune-now').onclick = async () => {
+    if (!confirm('Delete rows older than the retention windows now?')) return;
+    const r = await post('/maintenance', { action: 'prune' });
+    if (r?.ok) toast(`Pruned ${r.pruned ?? 0} rows`, 'success');
+    else toast(r?.msg || 'Prune failed', 'error');
+  };
+  $('#set-vacuum-now').onclick = async () => {
+    toast('Running VACUUM…', 'info');
+    const r = await post('/maintenance', { action: 'vacuum' });
+    if (r?.ok) toast('VACUUM done — space reclaimed', 'success');
+    else toast(r?.msg || 'VACUUM failed', 'error');
+  };
+
+  $('#set-seed-defaults').onclick = async () => {
+    let added = 0, skipped = 0;
+    for (const p of ALERT_PRESETS.slice(0, 25)) {
+      const r = await post('/rules/add', {
+        name: p.name, match_type: p.match_type,
+        match_value: p.match_value, action: p.action,
+      });
+      if (r?.ok) added++; else skipped++;
+    }
+    toast(`Defaults: ${added} added, ${skipped} already present`, 'success');
+    if (state.tab === 'alerts') renderPresetAlerts();
+  };
+  // Trigger log auto-refresh when entering Logs tab
+  $$('.nav a').forEach(a => {
+    const orig = a.onclick;
+    a.addEventListener('click', () => {
+      setTimeout(wireLogRefresh, 100);
+    });
+  });
+  $('#storage-pcap-jump')?.addEventListener('click', () => $('#btn-pcap').click());
+  $('#storage-geo-toggle')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const cur = await api('/settings');
+    const next = !(cur?.geo_enabled);
+    await post('/settings', { geo_enabled: next });
+    toast(`GeoIP lookups ${next ? 'enabled' : 'disabled'}`, 'success');
+  });
+
+  // Theme / compact / scale
+  const themeSel = $('#opt-theme'); themeSel.value = state.theme;
+  themeSel.onchange = () => { state.theme = themeSel.value; applyTheme(); savePrefs(); };
+  const compactCb = $('#opt-compact'); compactCb.checked = !!state.compact;
+  compactCb.onchange = () => { state.compact = compactCb.checked; applyTheme(); savePrefs(); };
+  const scaleSel = $('#opt-scale'); scaleSel.value = String(state.scale);
+  scaleSel.onchange = () => { state.scale = Number(scaleSel.value); applyTheme(); savePrefs(); };
+  $('#opt-shortcuts').onclick = showShortcuts;
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input, textarea, select')) return;
+    const tabs = ['dashboard','live','map','processes','domains','rules','blocked','history','alerts'];
+    if (e.key >= '1' && e.key <= '9') {
+      const t = tabs[Number(e.key) - 1];
+      if (t) { switchTab(t); e.preventDefault(); }
+    } else if (e.key === '/') {
+      $('#filter').focus(); e.preventDefault();
+    } else if (e.key === '?') {
+      showShortcuts(); e.preventDefault();
+    } else if (e.key === 'p') {
+      $('#btn-pause').click();
+    } else if (e.key === 'u') {
+      const cb = $('#f-pause'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
+    } else if (e.key === 'g') {
+      const cycle = ['', 'process', 'domain', 'country'];
+      const next = cycle[(cycle.indexOf(state.fGroup) + 1) % cycle.length];
+      state.fGroup = next; $('#f-group').value = next; savePrefs(); renderLive();
+    } else if (e.key === 'r') {
+      $('#f-clear')?.click();
+    } else if (e.key === 'Escape') {
+      $('#filter').value = ''; state.filter = ''; refreshCurrentTab();
+    }
+  });
+
+  // Preset alerts
+  renderPresetAlerts();
+
+  // Alert toggles (toast + sound)
+  const aT = $('#alert-toast'); aT.checked = !!state.alertToast;
+  aT.onchange = () => { state.alertToast = aT.checked; savePrefs(); };
+  const aS = $('#alert-sound'); aS.checked = !!state.alertSound;
+  aS.onchange = () => { state.alertSound = aS.checked; savePrefs(); };
+
+  // Background alert poll for toast/sound on any tab (every 5s)
+  pollAlertsNotify();
+  setInterval(pollAlertsNotify, 5000);
+
+  $('#alert-apply').onclick = async () => {
+    const r = await post('/alerts/config', {
+      new_process: $('#alert-newproc').checked,
+      bw_threshold_mb: Number($('#alert-bw').value) || 0,
+    });
+    if (r) toast('Alert rules updated', 'success');
+  };
+
+  initChart();
+  connectWS();
+
+  // Poll only the non-live tabs every 2.5s (live is push-driven)
+  setInterval(() => {
+    if (['processes','domains','blocked','rules','alerts'].includes(state.tab)) {
+      refreshCurrentTab();
+    }
+  }, 2500);
+
+  // Sync alert form once status arrives
+  setTimeout(() => {
+    const s = state.status;
+    $('#alert-newproc').checked = !!s.alert_new_process;
+    $('#alert-bw').value = s.alert_bw_threshold_mb || 0;
+  }, 800);
+}
+
+init();
+</script>
+</body>
+</html>
